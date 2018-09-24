@@ -41,6 +41,7 @@ enum _zend_ast_kind {
 	ZEND_AST_FUNC_DECL,
 	ZEND_AST_CLOSURE,
 	ZEND_AST_METHOD,
+	ZEND_AST_METHOD_EX,
 	ZEND_AST_CLASS,
 
 	/* list nodes */

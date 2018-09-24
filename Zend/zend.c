@@ -637,6 +637,9 @@ static void compiler_globals_ctor(zend_compiler_globals *compiler_globals) /* {{
 		compiler_globals->static_members_table = NULL;
 	}
 	compiler_globals->script_encoding_list = NULL;
+
+	compiler_globals->class_extension_functions = (HashTable *) malloc(sizeof(HashTable));
+	zend_hash_init_ex(compiler_globals->class_extension_functions, 8, NULL, NULL, 1, 1);
 }
 /* }}} */
 
@@ -661,6 +664,8 @@ static void compiler_globals_dtor(zend_compiler_globals *compiler_globals) /* {{
 		pefree((char*)compiler_globals->script_encoding_list, 1);
 	}
 	compiler_globals->last_static_member = 0;
+
+	zend_hash_destroy(compiler_globals->class_extension_functions);
 }
 /* }}} */
 

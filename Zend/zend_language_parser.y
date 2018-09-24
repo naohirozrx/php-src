@@ -224,7 +224,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 /* Token used to force a parse error from the lexer */
 %token T_ERROR
 
-%type <ast> top_statement namespace_name name statement function_declaration_statement
+%type <ast> top_statement namespace_name name statement function_declaration_statement class_extension_function_declaration_statement
 %type <ast> class_declaration_statement trait_declaration_statement
 %type <ast> interface_declaration_statement interface_extends_list
 %type <ast> group_use_declaration inline_use_declarations inline_use_declaration
@@ -308,6 +308,7 @@ name:
 top_statement:
 		statement							{ $$ = $1; }
 	|	function_declaration_statement		{ $$ = $1; }
+	|	class_extension_function_declaration_statement { $$ = $1; }
 	|	class_declaration_statement			{ $$ = $1; }
 	|	trait_declaration_statement			{ $$ = $1; }
 	|	interface_declaration_statement		{ $$ = $1; }
@@ -487,6 +488,13 @@ function_declaration_statement:
 	backup_fn_flags '{' inner_statement_list '}' backup_fn_flags
 		{ $$ = zend_ast_create_decl(ZEND_AST_FUNC_DECL, $2 | $13, $1, $4,
 		      zend_ast_get_str($3), $6, NULL, $11, $8); CG(extra_fn_flags) = $9; }
+;
+
+class_extension_function_declaration_statement:
+	function returns_ref namespace_name T_OBJECT_OPERATOR T_STRING backup_doc_comment '(' parameter_list ')'
+	return_type backup_fn_flags method_body backup_fn_flags
+		{ $$ = zend_ast_create_decl(ZEND_AST_METHOD_EX, $2 | ZEND_ACC_PUBLIC | $13, $1, $6,
+			zend_ast_get_str($5), $8, $3, $12, $10); CG(extra_fn_flags) = $11; }
 ;
 
 is_reference:

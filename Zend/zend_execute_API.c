@@ -275,6 +275,13 @@ void shutdown_executor(void) /* {{{ */
 		zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_deactivator);
 	} zend_end_try();
 
+	zend_class_entry *temp_ce;
+
+	ZEND_HASH_FOREACH_STR_KEY_PTR(CG(class_extension_functions), key, temp_ce) {
+		zend_hash_del(&temp_ce->function_table, key);
+		zend_string_release_ex(key, 0);
+	} ZEND_HASH_FOREACH_END();
+
 	if (fast_shutdown) {
 		/* Fast Request Shutdown
 		 * =====================
