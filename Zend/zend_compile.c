@@ -2287,7 +2287,7 @@ static inline zend_bool zend_is_unticked_stmt(zend_ast *ast) /* {{{ */
 {
 	return ast->kind == ZEND_AST_STMT_LIST || ast->kind == ZEND_AST_LABEL
 		|| ast->kind == ZEND_AST_PROP_DECL || ast->kind == ZEND_AST_CLASS_CONST_DECL
-		|| ast->kind == ZEND_AST_USE_TRAIT || ast->kind == ZEND_AST_METHOD || ast->kind == ZEND_AST_METHOD_EX;
+		|| ast->kind == ZEND_AST_USE_TRAIT || ast->kind == ZEND_AST_METHOD;
 }
 /* }}} */
 
@@ -5634,8 +5634,9 @@ void zend_compile_closure_uses(zend_ast *ast) /* {{{ */
 }
 /* }}} */
 
-void zend_begin_method_decl_ex(zend_class_entry *ce, zend_op_array *op_array, zend_string *name, zend_bool has_body) /* {{{ */
+void zend_begin_method_decl(zend_op_array *op_array, zend_string *name, zend_bool has_body) /* {{{ */
 {
+	zend_class_entry *ce = CG(active_class_entry);
 	zend_bool in_interface = (ce->ce_flags & ZEND_ACC_INTERFACE) != 0;
 	zend_bool in_trait = (ce->ce_flags & ZEND_ACC_TRAIT) != 0;
 	zend_bool is_public = (op_array->fn_flags & ZEND_ACC_PUBLIC) != 0;
@@ -5676,11 +5677,7 @@ void zend_begin_method_decl_ex(zend_class_entry *ce, zend_op_array *op_array, ze
 
 	if (zend_hash_add_ptr(&ce->function_table, lcname, op_array) == NULL) {
 		zend_error_noreturn(E_COMPILE_ERROR, "Cannot redeclare %s::%s()",
-		ZSTR_VAL(ce->name), ZSTR_VAL(name));
-	}
-
-	if (ce->type == ZEND_INTERNAL_CLASS) {
-		zend_hash_add_ptr(CG(class_extension_functions), lcname, ce);
+			ZSTR_VAL(ce->name), ZSTR_VAL(name));
 	}
 
 	if (in_interface) {
@@ -5813,20 +5810,6 @@ void zend_begin_method_decl_ex(zend_class_entry *ce, zend_op_array *op_array, ze
 }
 /* }}} */
 
-void zend_begin_method_decl_ex2(zend_string *class_name, zend_op_array *op_array, zend_string *name, zend_bool has_body) /* {{{ */
-{
-	zend_class_entry *ce = zend_lookup_class(class_name);
-	zend_begin_method_decl_ex(ce, op_array, name, has_body);
-}
-/* }}} */
-
-void zend_begin_method_decl(zend_op_array *op_array, zend_string *name, zend_bool has_body) /* {{{ */
-{
-	zend_class_entry *ce = CG(active_class_entry);
-	zend_begin_method_decl_ex(ce, op_array, name, has_body);
-}
-/* }}} */
-
 static void zend_begin_func_decl(znode *result, zend_op_array *op_array, zend_ast_decl *decl, zend_bool toplevel) /* {{{ */
 {
 	zend_ast *params_ast = decl->child[0];
@@ -5893,17 +5876,10 @@ void zend_compile_func_decl(znode *result, zend_ast *ast, zend_bool toplevel) /*
 {
 	zend_ast_decl *decl = (zend_ast_decl *) ast;
 	zend_ast *params_ast = decl->child[0];
-	zend_ast *uses_ast;
+	zend_ast *uses_ast = decl->child[1];
 	zend_ast *stmt_ast = decl->child[2];
 	zend_ast *return_type_ast = decl->child[3];
 	zend_bool is_method = decl->kind == ZEND_AST_METHOD;
-	zend_bool is_ex_method = decl->kind == ZEND_AST_METHOD_EX;
-
-	if(is_ex_method){
-		uses_ast = NULL;
-	} else {
-		uses_ast = decl->child[1];
-	}
 
 	zend_op_array *orig_op_array = CG(active_op_array);
 	zend_op_array *op_array = zend_arena_alloc(&CG(arena), sizeof(zend_op_array));
@@ -5925,10 +5901,6 @@ void zend_compile_func_decl(znode *result, zend_ast *ast, zend_bool toplevel) /*
 	if (is_method) {
 		zend_bool has_body = stmt_ast != NULL;
 		zend_begin_method_decl(op_array, decl->name, has_body);
-	} else if (is_ex_method){
-		zend_bool has_body = stmt_ast != NULL;
-		zend_string * class_name = zend_ast_get_str(decl->child[1]);
-		zend_begin_method_decl_ex2(class_name, op_array, decl->name, has_body);
 	} else {
 		zend_begin_func_decl(result, op_array, decl, toplevel);
 		if (uses_ast) {
@@ -8150,7 +8122,6 @@ void zend_compile_stmt(zend_ast *ast) /* {{{ */
 			break;
 		case ZEND_AST_FUNC_DECL:
 		case ZEND_AST_METHOD:
-		case ZEND_AST_METHOD_EX:
 			zend_compile_func_decl(NULL, ast, 0);
 			break;
 		case ZEND_AST_PROP_DECL:

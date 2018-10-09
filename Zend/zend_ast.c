@@ -1117,7 +1117,6 @@ static ZEND_COLD void zend_ast_export_stmt(smart_str *str, zend_ast *ast, int in
 			case ZEND_AST_FOREACH:
 			case ZEND_AST_FUNC_DECL:
 			case ZEND_AST_METHOD:
-			case ZEND_AST_METHOD_EX:
 			case ZEND_AST_CLASS:
 			case ZEND_AST_USE_TRAIT:
 			case ZEND_AST_NAMESPACE:
@@ -1316,7 +1315,6 @@ tail_call:
 		case ZEND_AST_FUNC_DECL:
 		case ZEND_AST_CLOSURE:
 		case ZEND_AST_METHOD:
-		case ZEND_AST_METHOD_EX:
 			decl = (zend_ast_decl *) ast;
 			if (decl->flags & ZEND_ACC_PUBLIC) {
 				smart_str_appends(str, "public ");
