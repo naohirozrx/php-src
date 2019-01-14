@@ -261,6 +261,7 @@ ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind ki
 #endif
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *list, zend_ast *op);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_add_constructor(zend_ast *ast, uint32_t start_lineno, zend_ast *params);
 
 ZEND_API zend_ast *zend_ast_create_decl(
 	zend_ast_kind kind, uint32_t flags, uint32_t start_lineno, zend_string *doc_comment,

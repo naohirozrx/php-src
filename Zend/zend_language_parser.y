@@ -503,9 +503,14 @@ class_declaration_statement:
 		class_modifiers T_CLASS { $<num>$ = CG(zend_lineno); }
 		T_STRING extends_from implements_list backup_doc_comment '{' class_statement_list '}'
 			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, $1, $<num>3, $7, zend_ast_get_str($4), $5, $6, $9, NULL); }
-	|	T_CLASS { $<num>$ = CG(zend_lineno); }
+	|	T_CLASS
 		T_STRING extends_from implements_list backup_doc_comment '{' class_statement_list '}'
-			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, 0, $<num>2, $6, zend_ast_get_str($3), $4, $5, $8, NULL); }
+			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, 0, CG(zend_lineno), $5, zend_ast_get_str($2), $3, $4, $7, NULL); }
+	|	T_CLASS
+		T_STRING  '(' parameter_list ')' extends_from implements_list backup_doc_comment '{' class_statement_list '}'
+			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, 0, CG(zend_lineno), $8, zend_ast_get_str($2), $6,
+			            $7, zend_ast_add_constructor($10, CG(zend_lineno), $4), NULL);
+			}
 ;
 
 class_modifiers:
@@ -713,7 +718,6 @@ class_statement_list:
 	|	/* empty */
 			{ $$ = zend_ast_create_list(0, ZEND_AST_STMT_LIST); }
 ;
-
 
 class_statement:
 		variable_modifiers property_list ';'

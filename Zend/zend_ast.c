@@ -396,6 +396,47 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *ast, zend_ast *op)
 	return (zend_ast *) list;
 }
 
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_add_constructor(zend_ast *ast, uint32_t start_lineno, zend_ast *params) {
+    zend_ast_list* par_list = (zend_ast_list *) params;
+    int i;
+	zend_ast* body_ast = zend_ast_create_list(0, ZEND_AST_STMT_LIST);
+
+    for(i=0; i < par_list->children; i++){
+		zval *param = zend_ast_get_zval(par_list->child[i]->child[1]);
+		char* param_name = Z_STRVAL_P(param);
+
+		zend_ast *class_prop = zend_ast_create(
+				ZEND_AST_PROP,
+				zend_ast_create(
+						ZEND_AST_VAR,
+						zend_ast_create_zval_from_str(zend_string_init("this", strlen("this"), 0))
+				),
+				zend_ast_create_zval_from_str(zend_string_init(param_name, strlen(param_name), 0))
+		);
+
+		zend_ast *constructor_param = zend_ast_create(
+				ZEND_AST_VAR,
+				zend_ast_create_zval_from_str(zend_string_init(param_name, strlen(param_name), 0))
+		);
+
+		zend_ast *assignment = zend_ast_create(ZEND_AST_ASSIGN, class_prop, constructor_param);
+		zend_ast_list_add(body_ast, assignment);
+    }
+
+	zend_ast *constructor = zend_ast_create_decl(
+			ZEND_AST_METHOD,
+			ZEND_ACC_PUBLIC,
+			start_lineno,
+			NULL,
+			zend_string_init("__construct", strlen("__construct"), 0),
+			params,
+			NULL,
+			body_ast,
+			NULL
+			);
+	return zend_ast_list_add(ast, constructor);
+}
+
 static int zend_ast_add_array_element(zval *result, zval *offset, zval *expr)
 {
 	switch (Z_TYPE_P(offset)) {
