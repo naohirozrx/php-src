@@ -396,47 +396,6 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *ast, zend_ast *op)
 	return (zend_ast *) list;
 }
 
-ZEND_API zend_ast * ZEND_FASTCALL zend_ast_add_constructor(zend_ast *ast, uint32_t start_lineno, zend_ast *params) {
-    zend_ast_list* par_list = (zend_ast_list *) params;
-    int i;
-	zend_ast* body_ast = zend_ast_create_list(0, ZEND_AST_STMT_LIST);
-
-    for(i=0; i < par_list->children; i++){
-		zval *param = zend_ast_get_zval(par_list->child[i]->child[1]);
-		char* param_name = Z_STRVAL_P(param);
-
-		zend_ast *class_prop = zend_ast_create(
-				ZEND_AST_PROP,
-				zend_ast_create(
-						ZEND_AST_VAR,
-						zend_ast_create_zval_from_str(zend_string_init("this", strlen("this"), 0))
-				),
-				zend_ast_create_zval_from_str(zend_string_init(param_name, strlen(param_name), 0))
-		);
-
-		zend_ast *constructor_param = zend_ast_create(
-				ZEND_AST_VAR,
-				zend_ast_create_zval_from_str(zend_string_init(param_name, strlen(param_name), 0))
-		);
-
-		zend_ast *assignment = zend_ast_create(ZEND_AST_ASSIGN, class_prop, constructor_param);
-		zend_ast_list_add(body_ast, assignment);
-    }
-
-	zend_ast *constructor = zend_ast_create_decl(
-			ZEND_AST_METHOD,
-			ZEND_ACC_PUBLIC,
-			start_lineno,
-			NULL,
-			zend_string_init("__construct", strlen("__construct"), 0),
-			params,
-			NULL,
-			body_ast,
-			NULL
-			);
-	return zend_ast_list_add(ast, constructor);
-}
-
 static int zend_ast_add_array_element(zval *result, zval *offset, zval *expr)
 {
 	switch (Z_TYPE_P(offset)) {
@@ -2037,6 +1996,95 @@ ZEND_API ZEND_COLD zend_string *zend_ast_export(const char *prefix, zend_ast *as
 	smart_str_0(&str);
 	return str.s;
 }
+
+/*
+ * ast_inject
+ */
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_create_method(char* name, uint32_t start_lineno, zend_ast_attr attr, zend_ast *params, zend_ast *body) {
+	return zend_ast_create_decl(
+		ZEND_AST_METHOD,
+		attr,
+		start_lineno,
+		NULL,
+		CHAR_TO_ZEND_STR(name),
+		params,
+		NULL,
+		body,
+		NULL
+	);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_this_var(char *name) {
+	return zend_ast_create(
+		ZEND_AST_PROP,
+		zend_ast_create(
+			ZEND_AST_VAR,
+			zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR("this"))
+		),
+		zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR(name))
+	);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_create_property_decl(char *name, zval* value) {
+	return zend_ast_create(
+		ZEND_AST_PROP_ELEM,
+		zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR(name)),
+		value ? zend_ast_create_zval(value) : NULL,
+		NULL
+	);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_var(char *name) {
+	return zend_ast_create(
+		ZEND_AST_VAR,
+		zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR(name))
+	);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_add_cf_construct(zend_ast *ast, uint32_t start_lineno, zend_ast *params, zend_ast *parent_arguments) {
+	int i;
+	zend_ast* body_ast = zend_ast_create_list(0, ZEND_AST_STMT_LIST);
+	zend_ast* properties_ast = zend_ast_create_list(0, ZEND_AST_PROP_DECL);
+
+	if(parent_arguments){
+		zend_ast *parent = zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR("parent"));
+		parent->attr = ZEND_NAME_NOT_FQ;
+		zend_ast *call = zend_ast_create(
+				ZEND_AST_STATIC_CALL,
+				parent,
+				zend_ast_create_zval_from_str(CHAR_TO_ZEND_STR(ZEND_CONSTRUCTOR_FUNC_NAME)),
+				parent_arguments
+		);
+
+		zend_ast_list_add(body_ast, call);
+	}
+
+	for(i=0; i < ZEND_AST_CHILD_COUNT(params); i++){
+		zend_ast *class_prop = zend_ast_inj_this_var(ZEND_AST_PARAM_NAME(params, i));
+		zend_ast *constructor_param = ZEND_AST_PARAM_AS_VAR(params, i);
+		zend_ast *prop_declaration = zend_ast_inj_create_property_decl(ZEND_AST_PARAM_NAME(params, i), NULL);
+
+		zend_ast_list_add(properties_ast, prop_declaration);
+		zend_ast_list_add(body_ast, zend_ast_create(ZEND_AST_ASSIGN, class_prop, constructor_param));
+	}
+
+	if(ZEND_AST_CHILD_COUNT(properties_ast)){
+		properties_ast->attr = ZEND_ACC_PUBLIC;
+		zend_ast_list_add(ast, properties_ast);
+	}
+
+	zend_ast *constructor = zend_ast_inj_create_method(
+		ZEND_CONSTRUCTOR_FUNC_NAME,
+		start_lineno,
+		ZEND_ACC_PUBLIC,
+		params,
+		body_ast
+	);
+	return zend_ast_list_add(ast, constructor);
+}
+/*
+ * ast_inject end
+ */
 
 /*
  * Local variables:

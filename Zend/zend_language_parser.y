@@ -232,7 +232,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %type <ast> unprefixed_use_declarations const_decl inner_statement
 %type <ast> expr optional_expr while_statement for_statement foreach_variable
 %type <ast> foreach_statement declare_statement finally_statement unset_variable variable
-%type <ast> extends_from parameter optional_type argument global_var
+%type <ast> extends_from not_empty_extends_from parameter optional_type argument global_var
 %type <ast> static_var class_statement trait_adaptation trait_precedence trait_alias
 %type <ast> absolute_trait_method_reference trait_method_reference property echo_expr
 %type <ast> new_expr anonymous_class class_name class_name_reference simple_variable
@@ -509,7 +509,12 @@ class_declaration_statement:
 	|	T_CLASS
 		T_STRING  '(' parameter_list ')' extends_from implements_list backup_doc_comment '{' class_statement_list '}'
 			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, 0, CG(zend_lineno), $8, zend_ast_get_str($2), $6,
-			            $7, zend_ast_add_constructor($10, CG(zend_lineno), $4), NULL);
+			 	$7, zend_ast_inj_add_cf_construct($10, CG(zend_lineno), $4, NULL), NULL);
+			}
+	|	T_CLASS
+		T_STRING  '(' parameter_list ')' not_empty_extends_from argument_list implements_list backup_doc_comment '{' class_statement_list '}'
+			{ $$ = zend_ast_create_decl(ZEND_AST_CLASS, 0, CG(zend_lineno), $9, zend_ast_get_str($2), $6,
+				$8, zend_ast_inj_add_cf_construct($11, CG(zend_lineno), $4, $7), NULL);
 			}
 ;
 
@@ -539,6 +544,10 @@ interface_declaration_statement:
 extends_from:
 		/* empty */		{ $$ = NULL; }
 	|	T_EXTENDS name	{ $$ = $2; }
+;
+
+not_empty_extends_from:
+		T_EXTENDS name	{ $$ = $2; }
 ;
 
 interface_extends_list:

@@ -261,7 +261,6 @@ ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind ki
 #endif
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *list, zend_ast *op);
-ZEND_API zend_ast * ZEND_FASTCALL zend_ast_add_constructor(zend_ast *ast, uint32_t start_lineno, zend_ast *params);
 
 ZEND_API zend_ast *zend_ast_create_decl(
 	zend_ast_kind kind, uint32_t flags, uint32_t start_lineno, zend_string *doc_comment,
@@ -331,6 +330,23 @@ static zend_always_inline zend_ast *zend_ast_list_rtrim(zend_ast *ast) {
 	}
 	return ast;
 }
+/*
+ * ast_inject
+ */
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_create_method(char* name, uint32_t start_lineno, zend_ast_attr attr, zend_ast *params, zend_ast *body);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_this_var(char *name);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_var(char *name);
+
+#define CHAR_TO_ZEND_STR(value) zend_string_init(value, strlen(value), 0)
+#define ZEND_AST_PARAM_NAME(params, index) Z_STRVAL_P(zend_ast_get_zval(((zend_ast_list *) params)->child[index]->child[1]))
+#define ZEND_AST_CHILD_COUNT(params) ((zend_ast_list *) params)->children
+#define ZEND_AST_PARAM_AS_VAR(params, index) zend_ast_inj_var(Z_STRVAL_P(zend_ast_get_zval(((zend_ast_list *) params)->child[index]->child[1])))
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_inj_add_cf_construct(zend_ast *ast, uint32_t start_lineno, zend_ast *params, zend_ast *parent_arguments);
+/*
+ * ast_inject end
+ */
 #endif
 
 /*
