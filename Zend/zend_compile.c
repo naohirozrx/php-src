@@ -1232,7 +1232,7 @@ static zend_bool zend_try_ct_eval_const(zval *zv, zend_string *name, zend_bool i
 	if (c && (
 	      ((ZEND_CONSTANT_FLAGS(c) & CONST_PERSISTENT)
 	      && !(CG(compiler_options) & ZEND_COMPILE_NO_PERSISTENT_CONSTANT_SUBSTITUTION)
-	      && (!(ZEND_CONSTANT_FLAGS(c) & CONST_NO_FILE_CACHE) || !(CG(compiler_options) & ZEND_COMPILE_WITH_FILE_CACHE)))
+	      && !((ZEND_CONSTANT_FLAGS(c) & CONST_NO_FILE_CACHE) && (CG(compiler_options) & ZEND_COMPILE_WITH_FILE_CACHE)))
 	   || (Z_TYPE(c->value) < IS_OBJECT && !(CG(compiler_options) & ZEND_COMPILE_NO_CONSTANT_SUBSTITUTION))
 	)) {
 		ZVAL_COPY_OR_DUP(zv, &c->value);
@@ -1467,30 +1467,27 @@ void zend_do_extended_fcall_end(void) /* {{{ */
 }
 /* }}} */
 
-zend_bool zend_is_auto_global_str(char *name, size_t len) /* {{{ */ {
-	zend_auto_global *auto_global;
-
-	if ((auto_global = zend_hash_str_find_ptr(CG(auto_globals), name, len)) != NULL) {
-		if (auto_global->armed) {
-			auto_global->armed = auto_global->auto_global_callback(auto_global->name);
-		}
-		return 1;
+zend_bool zend_is_auto_global_ex(zend_auto_global *auto_global) /* {{{ */
+{
+	if (auto_global == NULL) {
+		return 0;
 	}
-	return 0;
+	if (auto_global->armed) {
+		auto_global->armed = auto_global->auto_global_callback(auto_global->name);
+	}
+	return 1;
+}
+/* }}} */
+
+zend_bool zend_is_auto_global_str(char *name, size_t len) /* {{{ */
+{
+	return zend_is_auto_global_ex(zend_hash_str_find_ptr(CG(auto_globals), name, len));
 }
 /* }}} */
 
 zend_bool zend_is_auto_global(zend_string *name) /* {{{ */
 {
-	zend_auto_global *auto_global;
-
-	if ((auto_global = zend_hash_find_ptr(CG(auto_globals), name)) != NULL) {
-		if (auto_global->armed) {
-			auto_global->armed = auto_global->auto_global_callback(auto_global->name);
-		}
-		return 1;
-	}
-	return 0;
+	return zend_is_auto_global_ex(zend_hash_find_ptr(CG(auto_globals), name));
 }
 /* }}} */
 
@@ -1999,58 +1996,58 @@ static void zend_compile_memoized_expr(znode *result, zend_ast *expr) /* {{{ */
 static void zend_emit_return_type_check(
 		znode *expr, zend_arg_info *return_info, zend_bool implicit) /* {{{ */
 {
-	if (ZEND_TYPE_IS_SET(return_info->type)) {
-		zend_op *opline;
+	if (!ZEND_TYPE_IS_SET(return_info->type)) {
+		return;
+	}
 
-		/* `return ...;` is illegal in a void function (but `return;` isn't) */
-		if (ZEND_TYPE_CODE(return_info->type) == IS_VOID) {
-			if (expr) {
-				if (expr->op_type == IS_CONST && Z_TYPE(expr->u.constant) == IS_NULL) {
-					zend_error_noreturn(E_COMPILE_ERROR,
-						"A void function must not return a value "
-						"(did you mean \"return;\" instead of \"return null;\"?)");
-				} else {
-					zend_error_noreturn(E_COMPILE_ERROR, "A void function must not return a value");
-				}
+	zend_op *opline;
+
+	/* `return ...;` is illegal in a void function (but `return;` isn't) */
+	if (ZEND_TYPE_CODE(return_info->type) == IS_VOID) {
+		if (expr) {
+			if (expr->op_type == IS_CONST && Z_TYPE(expr->u.constant) == IS_NULL) {
+				zend_error_noreturn(E_COMPILE_ERROR,
+					"A void function must not return a value "
+					"(did you mean \"return;\" instead of \"return null;\"?)");
+			} else {
+				zend_error_noreturn(E_COMPILE_ERROR, "A void function must not return a value");
 			}
+		}
+		/* we don't need run-time check */
+		return;
+	}
+
+	if (!expr && !implicit) {
+		if (ZEND_TYPE_ALLOW_NULL(return_info->type)) {
+			zend_error_noreturn(E_COMPILE_ERROR,
+				"A function with return type must return a value "
+				"(did you mean \"return null;\" instead of \"return;\"?)");
+		} else {
+			zend_error_noreturn(E_COMPILE_ERROR,
+				"A function with return type must return a value");
+		}
+	}
+
+	if (expr && expr->op_type == IS_CONST) {
+		zend_uchar z_type = Z_TYPE(expr->u.constant);
+		if ((ZEND_TYPE_CODE(return_info->type) == z_type)
+		 ||((ZEND_TYPE_CODE(return_info->type) == _IS_BOOL) && (z_type == IS_FALSE || z_type == IS_TRUE))
+		 || (ZEND_TYPE_ALLOW_NULL(return_info->type) && z_type == IS_NULL)) {
 			/* we don't need run-time check */
 			return;
 		}
+	}
 
-		if (!expr && !implicit) {
-			if (ZEND_TYPE_ALLOW_NULL(return_info->type)) {
-				zend_error_noreturn(E_COMPILE_ERROR,
-					"A function with return type must return a value "
-					"(did you mean \"return null;\" instead of \"return;\"?)");
-			} else {
-				zend_error_noreturn(E_COMPILE_ERROR,
-					"A function with return type must return a value");
-			}
-		}
-
-		if (expr && expr->op_type == IS_CONST) {
-			if ((ZEND_TYPE_CODE(return_info->type) == Z_TYPE(expr->u.constant))
-			 ||((ZEND_TYPE_CODE(return_info->type) == _IS_BOOL)
-			  && (Z_TYPE(expr->u.constant) == IS_FALSE
-			   || Z_TYPE(expr->u.constant) == IS_TRUE))
-			 || (ZEND_TYPE_ALLOW_NULL(return_info->type)
-			  && Z_TYPE(expr->u.constant) == IS_NULL)) {
-				/* we don't need run-time check */
-				return;
-			}
-		}
-
-		opline = zend_emit_op(NULL, ZEND_VERIFY_RETURN_TYPE, expr, NULL);
-		if (expr && expr->op_type == IS_CONST) {
-			opline->result_type = expr->op_type = IS_TMP_VAR;
-			opline->result.var = expr->u.op.var = get_temporary_variable();
-		}
-		if (ZEND_TYPE_IS_CLASS(return_info->type)) {
-			opline->op2.num = CG(active_op_array)->cache_size;
-			CG(active_op_array)->cache_size += sizeof(void*);
-		} else {
-			opline->op2.num = -1;
-		}
+	opline = zend_emit_op(NULL, ZEND_VERIFY_RETURN_TYPE, expr, NULL);
+	if (expr && expr->op_type == IS_CONST) {
+		opline->result_type = expr->op_type = IS_TMP_VAR;
+		opline->result.var = expr->u.op.var = get_temporary_variable();
+	}
+	if (ZEND_TYPE_IS_CLASS(return_info->type)) {
+		opline->op2.num = CG(active_op_array)->cache_size;
+		CG(active_op_array)->cache_size += sizeof(void*);
+	} else {
+		opline->op2.num = -1;
 	}
 }
 /* }}} */
@@ -2081,9 +2078,7 @@ void zend_emit_final_return(int return_one) /* {{{ */
 static inline zend_bool zend_is_variable(zend_ast *ast) /* {{{ */
 {
 	return ast->kind == ZEND_AST_VAR || ast->kind == ZEND_AST_DIM
-		|| ast->kind == ZEND_AST_PROP || ast->kind == ZEND_AST_STATIC_PROP
-		|| ast->kind == ZEND_AST_CALL || ast->kind == ZEND_AST_METHOD_CALL
-		|| ast->kind == ZEND_AST_STATIC_CALL;
+		|| ast->kind == ZEND_AST_PROP || ast->kind == ZEND_AST_STATIC_PROP;
 }
 /* }}} */
 
@@ -2092,6 +2087,12 @@ static inline zend_bool zend_is_call(zend_ast *ast) /* {{{ */
 	return ast->kind == ZEND_AST_CALL
 		|| ast->kind == ZEND_AST_METHOD_CALL
 		|| ast->kind == ZEND_AST_STATIC_CALL;
+}
+/* }}} */
+
+static inline zend_bool zend_is_variable_or_call(zend_ast *ast) /* {{{ */
+{
+	return zend_is_variable(ast) || zend_is_call(ast);
 }
 /* }}} */
 
@@ -2109,7 +2110,7 @@ static inline zend_bool zend_can_write_to_variable(zend_ast *ast) /* {{{ */
 		ast = ast->child[0];
 	}
 
-	return zend_is_variable(ast);
+	return zend_is_variable_or_call(ast);
 }
 /* }}} */
 
@@ -2225,31 +2226,32 @@ static void zend_compile_class_ref(znode *result, zend_ast *name_ast, uint32_t f
 static int zend_try_compile_cv(znode *result, zend_ast *ast) /* {{{ */
 {
 	zend_ast *name_ast = ast->child[0];
-	if (name_ast->kind == ZEND_AST_ZVAL) {
-		zval *zv = zend_ast_get_zval(name_ast);
-		zend_string *name;
 
-		if (EXPECTED(Z_TYPE_P(zv) == IS_STRING)) {
-			name = zval_make_interned_string(zv);
-		} else {
-			name = zend_new_interned_string(zval_get_string_func(zv));
-		}
-
-		if (zend_is_auto_global(name)) {
-			return FAILURE;
-		}
-
-		result->op_type = IS_CV;
-		result->u.op.var = lookup_cv(name);
-
-		if (UNEXPECTED(Z_TYPE_P(zv) != IS_STRING)) {
-			zend_string_release_ex(name, 0);
-		}
-
-		return SUCCESS;
+	if (name_ast->kind != ZEND_AST_ZVAL) {
+		return FAILURE;
 	}
 
-	return FAILURE;
+	zval *zv = zend_ast_get_zval(name_ast);
+	zend_string *name;
+
+	if (EXPECTED(Z_TYPE_P(zv) == IS_STRING)) {
+		name = zval_make_interned_string(zv);
+	} else {
+		name = zend_new_interned_string(zval_get_string_func(zv));
+	}
+
+	if (zend_is_auto_global(name)) {
+		return FAILURE;
+	}
+
+	result->op_type = IS_CV;
+	result->u.op.var = lookup_cv(name);
+
+	if (UNEXPECTED(Z_TYPE_P(zv) != IS_STRING)) {
+		zend_string_release_ex(name, 0);
+	}
+
+	return SUCCESS;
 }
 /* }}} */
 
@@ -2607,7 +2609,7 @@ zend_bool zend_is_assign_to_self(zend_ast *var_ast, zend_ast *expr_ast) /* {{{ *
 		return 0;
 	}
 
-	while (zend_is_variable(var_ast) && var_ast->kind != ZEND_AST_VAR) {
+	while (zend_is_variable_or_call(var_ast)) {
 		var_ast = var_ast->child[0];
 	}
 
@@ -2741,7 +2743,7 @@ void zend_compile_assign(znode *result, zend_ast *ast) /* {{{ */
 			return;
 		case ZEND_AST_ARRAY:
 			if (zend_propagate_list_refs(var_ast)) {
-				if (!zend_is_variable(expr_ast)) {
+				if (!zend_is_variable_or_call(expr_ast)) {
 					zend_error_noreturn(E_COMPILE_ERROR,
 						"Cannot assign reference to non referencable value");
 				}
@@ -2938,26 +2940,26 @@ uint32_t zend_compile_args(zend_ast *ast, zend_function *fbc) /* {{{ */
 		}
 
 		arg_count++;
-		if (zend_is_variable(arg)) {
-			if (zend_is_call(arg)) {
-				zend_compile_var(&arg_node, arg, BP_VAR_R, 0);
-				if (arg_node.op_type & (IS_CONST|IS_TMP_VAR)) {
-					/* Function call was converted into builtin instruction */
-					opcode = ZEND_SEND_VAL;
-				} else {
-					if (fbc) {
-						if (ARG_MUST_BE_SENT_BY_REF(fbc, arg_num)) {
-							opcode = ZEND_SEND_VAR_NO_REF;
-						} else if (ARG_MAY_BE_SENT_BY_REF(fbc, arg_num)) {
-							opcode = ZEND_SEND_VAL;
-						} else {
-							opcode = ZEND_SEND_VAR;
-						}
-					} else {
-						opcode = ZEND_SEND_VAR_NO_REF_EX;
-					}
-				}
-			} else if (fbc) {
+        if (zend_is_call(arg)) {
+            zend_compile_var(&arg_node, arg, BP_VAR_R, 0);
+            if (arg_node.op_type & (IS_CONST|IS_TMP_VAR)) {
+                /* Function call was converted into builtin instruction */
+                opcode = ZEND_SEND_VAL;
+            } else {
+                if (fbc) {
+                    if (ARG_MUST_BE_SENT_BY_REF(fbc, arg_num)) {
+                        opcode = ZEND_SEND_VAR_NO_REF;
+                    } else if (ARG_MAY_BE_SENT_BY_REF(fbc, arg_num)) {
+                        opcode = ZEND_SEND_VAL;
+                    } else {
+                        opcode = ZEND_SEND_VAR;
+                    }
+                } else {
+                    opcode = ZEND_SEND_VAR_NO_REF_EX;
+                }
+            }
+        } else if (zend_is_variable(arg)) {
+			 if (fbc) {
 				if (ARG_SHOULD_BE_SENT_BY_REF(fbc, arg_num)) {
 					zend_compile_var(&arg_node, arg, BP_VAR_W, 1);
 					opcode = ZEND_SEND_REF;
@@ -3035,17 +3037,15 @@ ZEND_API zend_uchar zend_get_call_op(const zend_op *init_op, zend_function *fbc)
 	if (fbc) {
 		if (fbc->type == ZEND_INTERNAL_FUNCTION) {
 			if (init_op->opcode == ZEND_INIT_FCALL && !zend_execute_internal) {
-				if (!(fbc->common.fn_flags & (ZEND_ACC_ABSTRACT|ZEND_ACC_DEPRECATED|ZEND_ACC_HAS_TYPE_HINTS|ZEND_ACC_RETURN_REFERENCE))) {
-					return ZEND_DO_ICALL;
+				if (fbc->common.fn_flags & (ZEND_ACC_ABSTRACT|ZEND_ACC_DEPRECATED|ZEND_ACC_HAS_TYPE_HINTS|ZEND_ACC_RETURN_REFERENCE)) {
+                    return ZEND_DO_FCALL_BY_NAME;
 				} else {
-					return ZEND_DO_FCALL_BY_NAME;
+                    return ZEND_DO_ICALL;
 				}
 			}
-		} else {
-			if (zend_execute_ex == execute_ex && !(fbc->common.fn_flags & ZEND_ACC_ABSTRACT)) {
-				return ZEND_DO_UCALL;
-			}
-		}
+		} else if (zend_execute_ex == execute_ex && !(fbc->common.fn_flags & ZEND_ACC_ABSTRACT)) {
+            return ZEND_DO_UCALL;
+        }
 	} else if (zend_execute_ex == execute_ex &&
 	           !zend_execute_internal &&
 	           (init_op->opcode == ZEND_INIT_FCALL_BY_NAME ||
@@ -4228,7 +4228,7 @@ void zend_compile_return(zend_ast *ast) /* {{{ */
 	if (!expr_ast) {
 		expr_node.op_type = IS_CONST;
 		ZVAL_NULL(&expr_node.u.constant);
-	} else if (by_ref && zend_is_variable(expr_ast) && !zend_is_call(expr_ast)) {
+	} else if (by_ref && zend_is_variable(expr_ast)) {
 		zend_compile_var(&expr_node, expr_ast, BP_VAR_W, 1);
 	} else {
 		zend_compile_expr(&expr_node, expr_ast);
@@ -4562,8 +4562,7 @@ void zend_compile_foreach(zend_ast *ast) /* {{{ */
 	zend_ast *key_ast = ast->child[2];
 	zend_ast *stmt_ast = ast->child[3];
 	zend_bool by_ref = value_ast->kind == ZEND_AST_REF;
-	zend_bool is_variable = zend_is_variable(expr_ast) && !zend_is_call(expr_ast)
-		&& zend_can_write_to_variable(expr_ast);
+	zend_bool is_variable = zend_is_variable(expr_ast) && zend_can_write_to_variable(expr_ast);
 
 	znode expr_node, reset_node, value_node, key_node;
 	zend_op *opline;
@@ -7409,7 +7408,7 @@ void zend_compile_yield(znode *result, zend_ast *ast) /* {{{ */
 	}
 
 	if (value_ast) {
-		if (returns_by_ref && zend_is_variable(value_ast) && !zend_is_call(value_ast)) {
+		if (returns_by_ref && zend_is_variable(value_ast)) {
 			zend_compile_var(&value_node, value_ast, BP_VAR_W, 1);
 		} else {
 			zend_compile_expr(&value_node, value_ast);
@@ -7499,7 +7498,7 @@ void zend_compile_isset_or_empty(znode *result, zend_ast *ast) /* {{{ */
 
 	ZEND_ASSERT(ast->kind == ZEND_AST_ISSET || ast->kind == ZEND_AST_EMPTY);
 
-	if (!zend_is_variable(var_ast) || zend_is_call(var_ast)) {
+	if (!zend_is_variable(var_ast)) {
 		if (ast->kind == ZEND_AST_EMPTY) {
 			/* empty(expr) can be transformed to !expr */
 			zend_ast *not_ast = zend_ast_create_ex(ZEND_AST_UNARY_OP, ZEND_BOOL_NOT, var_ast);
