@@ -119,6 +119,9 @@ PHP_MINIT_FUNCTION(array) /* {{{ */
 	REGISTER_LONG_CONSTANT("ARRAY_FILTER_USE_BOTH", ARRAY_FILTER_USE_BOTH, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("ARRAY_FILTER_USE_KEY", ARRAY_FILTER_USE_KEY, CONST_CS | CONST_PERSISTENT);
 
+	REGISTER_LONG_CONSTANT("ARRAY_VALUES_IN_PLACE", ARRAY_VALUES_IN_PLACE, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("ARRAY_VALUES_SKIP_NULL", ARRAY_VALUES_SKIP_NULL, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("ARRAY_VALUES_SKIP_FALSE", ARRAY_VALUES_SKIP_FALSE, CONST_CS | CONST_PERSISTENT);
 	return SUCCESS;
 }
 /* }}} */
@@ -4032,40 +4035,101 @@ PHP_FUNCTION(array_values)
 {
 	zval	 *input,		/* Input array */
 			 *entry;		/* An entry in the input array */
+	zend_long flags = 0;
 	zend_array *arrval;
 	zend_long arrlen;
 
-	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_ARRAY(input)
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_ARRAY_EX(input, 0, 1)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(flags)
 	ZEND_PARSE_PARAMETERS_END();
+
+	zend_bool skip_null = flags & ARRAY_VALUES_SKIP_NULL;
+	zend_bool skip_false = flags & ARRAY_VALUES_SKIP_FALSE;
+	zend_bool in_place = flags & ARRAY_VALUES_IN_PLACE;
 
 	arrval = Z_ARRVAL_P(input);
 
 	/* Return empty input as is */
 	arrlen = zend_hash_num_elements(arrval);
 	if (!arrlen) {
-		ZVAL_EMPTY_ARRAY(return_value);
+		if (UNEXPECTED(in_place)) {
+			RETURN_TRUE;
+		} else {
+			ZVAL_EMPTY_ARRAY(return_value);
+		}
 		return;
 	}
 
 	/* Return vector-like packed arrays as-is */
 	if (HT_IS_PACKED(arrval) && HT_IS_WITHOUT_HOLES(arrval) &&
-		arrval->nNextFreeElement == arrlen) {
+		arrval->nNextFreeElement == arrlen && !(skip_null || skip_false)) {
+		if (in_place) {
+			RETURN_TRUE;
+		}
 		RETURN_ZVAL(input, 1, 0);
 	}
 
+	if (in_place) {
+		uint32_t i = 0, skip = 0;
+		Bucket *p;
+		ZEND_HASH_FOREACH_VAL(arrval, entry) {
+			if (UNEXPECTED((skip_null && Z_TYPE_P(entry) == IS_NULL)
+				|| (skip_false && !zend_is_true(entry))) == 1) {
+				zval_ptr_dtor(entry);
+				skip++;
+			} else if (skip) {
+				p = arrval->arData + i - skip;
+				zval *value = &p->val;
+				ZVAL_COPY_VALUE(value, entry);
+				zval_copy_ctor(value);
+				zval_ptr_dtor(entry);
+			}
+			p = arrval->arData + i;
+			p->h = i;
+			if (p->key) {
+				zend_string_release(p->key);
+				p->key = NULL;
+			}
+			i++;
+		} ZEND_HASH_FOREACH_END();
+		arrval->nNextFreeElement = i - skip;
+		arrval->nNumUsed = i - skip;
+		arrval->nNumOfElements = i - skip;
+
+		if (!HT_IS_PACKED(arrval)) {
+			zend_hash_to_packed(arrval);
+		}
+		RETURN_TRUE;
+	}
+
+	uint32_t skip = 0;
+	if (UNEXPECTED(skip_null || skip_false) == 1) {
+		ZEND_HASH_FOREACH_VAL(arrval, entry) {
+			if (UNEXPECTED((skip_null && Z_TYPE_P(entry) == IS_NULL)
+				|| (skip_false && !zend_is_true(entry))) == 1) {
+				skip++;
+			}
+		} ZEND_HASH_FOREACH_END();
+	}
 	/* Initialize return array */
-	array_init_size(return_value, zend_hash_num_elements(arrval));
+	array_init_size(return_value, zend_hash_num_elements(arrval) - skip);
 	zend_hash_real_init_packed(Z_ARRVAL_P(return_value));
 
 	/* Go through input array and add values to the return array */
 	ZEND_HASH_FILL_PACKED(Z_ARRVAL_P(return_value)) {
 		ZEND_HASH_FOREACH_VAL(arrval, entry) {
-			if (UNEXPECTED(Z_ISREF_P(entry) && Z_REFCOUNT_P(entry) == 1)) {
-				entry = Z_REFVAL_P(entry);
+			if (UNEXPECTED((skip_null && Z_TYPE_P(entry) == IS_NULL)
+				|| (skip_false && !zend_is_true(entry))) == 1) {
+				continue;
+			} else {
+				if (UNEXPECTED(Z_ISREF_P(entry) && Z_REFCOUNT_P(entry) == 1)) {
+					entry = Z_REFVAL_P(entry);
+				}
+				Z_TRY_ADDREF_P(entry);
+				ZEND_HASH_FILL_ADD(entry);
 			}
-			Z_TRY_ADDREF_P(entry);
-			ZEND_HASH_FILL_ADD(entry);
 		} ZEND_HASH_FOREACH_END();
 	} ZEND_HASH_FILL_END();
 }

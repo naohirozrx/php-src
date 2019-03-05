@@ -124,6 +124,10 @@ PHPAPI zend_long php_count_recursive(HashTable *ht);
 #define ARRAY_FILTER_USE_BOTH	1
 #define ARRAY_FILTER_USE_KEY	2
 
+#define ARRAY_VALUES_IN_PLACE	1<<1
+#define ARRAY_VALUES_SKIP_NULL	1<<2
+#define ARRAY_VALUES_SKIP_FALSE	1<<3
+
 ZEND_BEGIN_MODULE_GLOBALS(array)
 	compare_func_t *multisort_func;
 ZEND_END_MODULE_GLOBALS(array)
