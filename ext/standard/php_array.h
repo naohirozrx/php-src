@@ -70,6 +70,7 @@ PHP_FUNCTION(array_keys);
 PHP_FUNCTION(array_key_first);
 PHP_FUNCTION(array_key_last);
 PHP_FUNCTION(array_values);
+PHP_FUNCTION(array_reindex);
 PHP_FUNCTION(array_count_values);
 PHP_FUNCTION(array_column);
 PHP_FUNCTION(array_reverse);
@@ -124,9 +125,8 @@ PHPAPI zend_long php_count_recursive(HashTable *ht);
 #define ARRAY_FILTER_USE_BOTH	1
 #define ARRAY_FILTER_USE_KEY	2
 
-#define ARRAY_VALUES_IN_PLACE	1<<1
-#define ARRAY_VALUES_SKIP_NULL	1<<2
-#define ARRAY_VALUES_SKIP_FALSE	1<<3
+#define ARRAY_REINDEX_SKIP_NULL		1<<1
+#define ARRAY_REINDEX_SKIP_EMPTY	1<<2
 
 ZEND_BEGIN_MODULE_GLOBALS(array)
 	compare_func_t *multisort_func;
