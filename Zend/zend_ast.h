@@ -251,17 +251,29 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_0(zend_ast_kind kind);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_1(zend_ast_kind kind, zend_ast *child);
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_2(zend_ast_kind kind, zend_ast *child1, zend_ast *child2);
 
+//ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_0(zend_ast_kind kind, int type, const char* text);
+//ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_1(zend_ast_kind kind, int type, const char* text, zend_ast *child1);
+//ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_2(zend_ast_kind kind, int type, const char* text, zend_ast *child1, zend_ast *child2);
+//ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_3(zend_ast_kind kind, int type, const char* text, zend_ast *child1, zend_ast *child2, zend_ast *child3);
+//ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_4(zend_ast_kind kind, int type, const char* text, zend_ast *child1, zend_ast *child2, zend_ast *child3, zend_ast *child4);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_2(zend_ast_kind kind, int type, const char* text);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_3(zend_ast_kind kind, int type, const char* text, zend_ast *child1);
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_4(zend_ast_kind kind, int type, const char* text, zend_ast *child1, zend_ast *child2);
+
 # define zend_ast_create(...) \
 	ZEND_AST_SPEC_CALL(zend_ast_create, __VA_ARGS__)
 # define zend_ast_create_ex(...) \
 	ZEND_AST_SPEC_CALL_EX(zend_ast_create_ex, __VA_ARGS__)
 # define zend_ast_create_list(init_children, ...) \
 	ZEND_AST_SPEC_CALL(zend_ast_create_list, __VA_ARGS__)
+# define zend_ast_create_deprecated(...) \
+	ZEND_AST_SPEC_CALL(zend_ast_create_deprecated, __VA_ARGS__)
 
 #else
 ZEND_API zend_ast *zend_ast_create(zend_ast_kind kind, ...);
 ZEND_API zend_ast *zend_ast_create_ex(zend_ast_kind kind, zend_ast_attr attr, ...);
 ZEND_API zend_ast *zend_ast_create_list(uint32_t init_children, zend_ast_kind kind, ...);
+ZEND_API zend_ast *zend_ast_create_deprecated(zend_ast_kind kind, int type, const char* text, ...)
 #endif
 
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_list_add(zend_ast *list, zend_ast *op);

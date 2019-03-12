@@ -243,6 +243,21 @@ ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_4(zend_ast_kind kind, zend_ast
 	return ast;
 }
 
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_2(zend_ast_kind kind, int type, const char* text) {
+	zend_error(type, text);
+	return zend_ast_create_0(kind);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_3(zend_ast_kind kind, int type, const char* text, zend_ast *child1) {
+	zend_error(type, text);
+	return zend_ast_create_1(kind, child1);
+}
+
+ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_deprecated_4(zend_ast_kind kind, int type, const char* text, zend_ast *child1, zend_ast *child2) {
+	zend_error(type, text);
+	return zend_ast_create_2(kind, child1, child2);
+}
+
 ZEND_API zend_ast * ZEND_FASTCALL zend_ast_create_list_0(zend_ast_kind kind) {
 	zend_ast *ast;
 	zend_ast_list *list;
@@ -344,6 +359,19 @@ ZEND_API zend_ast *zend_ast_create_ex(zend_ast_kind kind, zend_ast_attr attr, ..
 
 	va_start(va, attr);
 	ast = zend_ast_create_from_va_list(kind, attr, va);
+	va_end(va);
+
+	return ast;
+}
+
+ZEND_API zend_ast *zend_ast_create_deprecated(zend_ast_kind kind, int type, const char* text, ...) {
+	va_list va;
+	zend_ast *ast;
+
+	zend_error(type, text);
+
+	va_start(va, kind);
+	ast = zend_ast_create_from_va_list(kind, 0, va);
 	va_end(va);
 
 	return ast;
