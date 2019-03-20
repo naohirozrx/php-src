@@ -36,8 +36,7 @@
 
 #include "zend_API.h"
 
-#undef sprintf
-#define sprintf php_sprintf
+#define php_sprintf sprintf
 
 /* Operating system family definition */
 #ifdef PHP_WIN32
@@ -81,7 +80,6 @@
 /* Windows specific defines */
 #ifdef PHP_WIN32
 # define PHP_PROG_SENDMAIL		"Built in mailer"
-# define HAVE_DECLARED_TIMEZONE
 # define WIN32_LEAN_AND_MEAN
 # define NOOPENFILE
 
@@ -97,8 +95,6 @@
 typedef int uid_t;
 typedef int gid_t;
 typedef char * caddr_t;
-typedef unsigned int uint;
-typedef unsigned long ulong;
 typedef int pid_t;
 
 # ifndef PHP_DEBUG
@@ -232,17 +228,7 @@ typedef unsigned int socklen_t;
 #include "zend_hash.h"
 #include "zend_alloc.h"
 #include "zend_stack.h"
-
-#if STDC_HEADERS
-# include <string.h>
-#else
-# ifndef HAVE_MEMCPY
-#  define memcpy(d, s, n)	bcopy((s), (d), (n))
-# endif
-# ifndef HAVE_MEMMOVE
-#  define memmove(d, s, n)	bcopy ((s), (d), (n))
-# endif
-#endif
+#include <string.h>
 
 #ifndef HAVE_STRERROR
 char *strerror(int);

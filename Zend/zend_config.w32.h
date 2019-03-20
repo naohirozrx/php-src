@@ -38,9 +38,6 @@
 
 #include <float.h>
 
-typedef unsigned long ulong;
-typedef unsigned int uint;
-
 #define HAVE_STDIOSTR_H 1
 #define HAVE_CLASS_ISTDIOSTREAM
 #define istdiostream stdiostream
@@ -62,8 +59,6 @@ extern "C++" {
 #define zend_finite(x)	_finite(x)
 #define zend_isnan(x)	_isnan(x)
 #endif
-
-#define zend_sprintf sprintf
 
 #ifndef __cplusplus
 /* This will cause the compilation process to be MUCH longer, but will generate

@@ -585,9 +585,10 @@ html_errors = On
 ; control characters. If your logger accepts everything, then no filtering
 ; is needed at all.
 ; Allowed values are:
-;   ascii (only base ASCII characters)
-;   no_ctrl (all characters except control characters)
+;   ascii (all printable ASCII characters and NL)
+;   no-ctrl (all characters except control characters)
 ;   all (all characters)
+; http://php.net/syslog.filter
 ;syslog.filter = ascii
 
 ;windows.show_crt_warning
@@ -996,7 +997,18 @@ cli_server.color = On
 ;intl.use_exceptions = 0
 
 [sqlite3]
+; Directory pointing to SQLite3 extensions
+; http://php.net/sqlite3.extension-dir
 ;sqlite3.extension_dir =
+
+; SQLite defensive mode flag (only available from SQLite 3.26+)
+; When the defensive flag is enabled, language features that allow ordinary
+; SQL to deliberately corrupt the database file are disabled. This forbids
+; writing directly to the schema, shadow tables (eg. FTS data tables), or
+; the sqlite_dbpage virtual table.
+; https://www.sqlite.org/c3ref/c_dbconfig_defensive.html
+; (for older SQLite versions, this flag has no use)
+;sqlite3.defensive = 1
 
 [Pcre]
 ; PCRE library backtracking limit.
@@ -1018,8 +1030,6 @@ cli_server.color = On
 ; Whether to pool ODBC connections. Can be one of "strict", "relaxed" or "off"
 ; http://php.net/pdo-odbc.connection-pooling
 ;pdo_odbc.connection_pooling=strict
-
-;pdo_odbc.db2_instance_name
 
 [Pdo_mysql]
 ; Default socket name for local MySQL connects.  If empty, uses the built-in

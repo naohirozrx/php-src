@@ -409,12 +409,8 @@ static const zend_function_entry date_functions[] = {
 	PHP_FE(mktime, arginfo_mktime)
 	PHP_FE(gmmktime, arginfo_gmmktime)
 	PHP_FE(checkdate, arginfo_checkdate)
-
-#ifdef HAVE_STRFTIME
 	PHP_FE(strftime, arginfo_strftime)
 	PHP_FE(gmstrftime, arginfo_gmstrftime)
-#endif
-
 	PHP_FE(time, arginfo_time)
 	PHP_FE(localtime, arginfo_localtime)
 	PHP_FE(getdate, arginfo_getdate)
@@ -551,6 +547,7 @@ static const zend_function_entry date_funcs_period[] = {
 	PHP_ME(DatePeriod,                getStartDate,                NULL, ZEND_ACC_PUBLIC)
 	PHP_ME(DatePeriod,                getEndDate,                  NULL, ZEND_ACC_PUBLIC)
 	PHP_ME(DatePeriod,                getDateInterval,             NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(DatePeriod,                getRecurrences,              NULL, ZEND_ACC_PUBLIC)
 	PHP_FE_END
 };
 
@@ -1633,7 +1630,6 @@ PHP_FUNCTION(checkdate)
 }
 /* }}} */
 
-#ifdef HAVE_STRFTIME
 /* {{{ php_strftime - (gm)strftime helper */
 PHPAPI void php_strftime(INTERNAL_FUNCTION_PARAMETERS, int gmt)
 {
@@ -1679,20 +1675,20 @@ PHPAPI void php_strftime(INTERNAL_FUNCTION_PARAMETERS, int gmt)
 	ta.tm_yday  = timelib_day_of_year(ts->y, ts->m, ts->d);
 	if (gmt) {
 		ta.tm_isdst = 0;
-#if HAVE_TM_GMTOFF
+#if HAVE_STRUCT_TM_TM_GMTOFF
 		ta.tm_gmtoff = 0;
 #endif
-#if HAVE_TM_ZONE
+#if HAVE_STRUCT_TM_TM_ZONE
 		ta.tm_zone = "GMT";
 #endif
 	} else {
 		offset = timelib_get_time_zone_info(timestamp, tzi);
 
 		ta.tm_isdst = offset->is_dst;
-#if HAVE_TM_GMTOFF
+#if HAVE_STRUCT_TM_TM_GMTOFF
 		ta.tm_gmtoff = offset->offset;
 #endif
-#if HAVE_TM_ZONE
+#if HAVE_STRUCT_TM_TM_ZONE
 		ta.tm_zone = offset->abbr;
 #endif
 	}
@@ -1745,7 +1741,6 @@ PHP_FUNCTION(gmstrftime)
 	php_strftime(INTERNAL_FUNCTION_PARAM_PASSTHRU, 1);
 }
 /* }}} */
-#endif
 
 /* {{{ proto int time(void)
    Return current UNIX timestamp */
@@ -2802,7 +2797,7 @@ PHP_METHOD(DateTime, __construct)
 	size_t time_str_len = 0;
 	zend_error_handling error_handling;
 
-	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 0, 2)
+	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_STRING(time_str, time_str_len)
 		Z_PARAM_OBJECT_OF_CLASS_EX(timezone_object, date_ce_timezone, 1, 0)
@@ -2824,7 +2819,7 @@ PHP_METHOD(DateTimeImmutable, __construct)
 	size_t time_str_len = 0;
 	zend_error_handling error_handling;
 
-	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 0, 2)
+	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_STRING(time_str, time_str_len)
 		Z_PARAM_OBJECT_OF_CLASS_EX(timezone_object, date_ce_timezone, 1, 0)
@@ -3829,7 +3824,7 @@ PHP_METHOD(DateTimeZone, __construct)
 	php_timezone_obj *tzobj;
 	zend_error_handling error_handling;
 
-	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(tz)
 	ZEND_PARSE_PARAMETERS_END();
 
@@ -4245,7 +4240,7 @@ PHP_METHOD(DateInterval, __construct)
 	timelib_rel_time *reltime;
 	zend_error_handling error_handling;
 
-	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(interval_string)
 	ZEND_PARSE_PARAMETERS_END();
 
@@ -4375,12 +4370,21 @@ PHP_FUNCTION(date_interval_create_from_date_string)
 		Z_PARAM_STR(time_str)
 	ZEND_PARSE_PARAMETERS_END_EX(RETURN_FALSE);
 
-	php_date_instantiate(date_ce_interval, return_value);
-
 	time = timelib_strtotime(ZSTR_VAL(time_str), ZSTR_LEN(time_str), &err, DATE_TIMEZONEDB, php_date_parse_tzfile_wrapper);
+
+	if (err->error_count > 0)  {
+		php_error_docref(NULL, E_WARNING, "Unknown or bad format (%s) at position %d (%c): %s", ZSTR_VAL(time_str),
+			err->error_messages[0].position, err->error_messages[0].character ? err->error_messages[0].character : ' ', err->error_messages[0].message);
+		RETVAL_FALSE;
+		goto cleanup;
+	}
+
+	php_date_instantiate(date_ce_interval, return_value);
 	diobj = Z_PHPINTERVAL_P(return_value);
 	diobj->diff = timelib_rel_time_clone(&time->relative);
 	diobj->initialized = 1;
+
+cleanup:
 	timelib_time_dtor(time);
 	timelib_error_container_dtor(err);
 }
@@ -4663,6 +4667,27 @@ PHP_METHOD(DatePeriod, getDateInterval)
 	diobj = Z_PHPINTERVAL_P(return_value);
 	diobj->diff = timelib_rel_time_clone(dpobj->interval);
 	diobj->initialized = 1;
+}
+/* }}} */
+
+/* {{{ proto int DatePeriod::getRecurrences()
+   Get recurrences.
+*/
+PHP_METHOD(DatePeriod, getRecurrences)
+{
+	php_period_obj   *dpobj;
+
+	if (zend_parse_parameters_none() == FAILURE) {
+			return;
+	}
+
+	dpobj = Z_PHPPERIOD_P(ZEND_THIS);
+
+	if (0 == dpobj->recurrences - dpobj->include_start_date) {
+			return;
+	}
+
+	RETURN_LONG(dpobj->recurrences - dpobj->include_start_date);
 }
 /* }}} */
 

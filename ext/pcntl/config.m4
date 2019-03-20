@@ -1,7 +1,9 @@
 dnl config.m4 for extension pcntl
 
-PHP_ARG_ENABLE(pcntl, whether to enable pcntl support,
-[  --enable-pcntl          Enable pcntl support (CLI/CGI only)])
+PHP_ARG_ENABLE([pcntl],
+  [whether to enable pcntl support],
+  [AS_HELP_STRING([--enable-pcntl],
+    [Enable pcntl support (CLI/CGI only)])])
 
 if test "$PHP_PCNTL" != "no"; then
   AC_CHECK_FUNCS(fork, [ AC_DEFINE(HAVE_FORK,1,[ ]) ], [ AC_MSG_ERROR(pcntl: fork() not supported by this platform) ])
@@ -24,5 +26,5 @@ if test "$PHP_PCNTL" != "no"; then
     AC_MSG_RESULT([no])
   ])
 
-  PHP_NEW_EXTENSION(pcntl, pcntl.c php_signal.c, $ext_shared, cli, $PCNTL_CFLAGS)
+  PHP_NEW_EXTENSION(pcntl, pcntl.c php_signal.c, $ext_shared, cli, $PCNTL_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 fi

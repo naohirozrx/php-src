@@ -53,6 +53,9 @@ var PHP_MAKEFILE_FRAGMENTS = PHP_SRC_DIR + "\\Makefile.fragments.w32";
    and manifest. */
 var WINVER = "0x0601"; /* 7/2008r2 */
 
+// There's a minimum requirement for bison.
+var MINBISON = "3.0.0";
+
 // There's a minimum requirement for re2c..
 var MINRE2C = "0.13.4";
 
@@ -180,6 +183,8 @@ function probe_binary(EXE, what)
 	var command = 'cmd /c ""' + EXE;
 	if (what == "version") {
 		command = command + '" -v"';
+	} else if (what == "longversion") {
+		command = command + '" --version"';
 	}
 	var version = execute(command + '" 2>&1"');
 
@@ -2044,6 +2049,19 @@ function generate_tmp_php_ini()
 
 		if (!is_on_exclude_list_for_test_ini(ext_list, ext_name)) {
 			INI.WriteLine(directive + "=php_" + ext_name + ".dll");
+
+			if ("opcache" == ext_name) {
+				var dir = get_define("BUILD_DIR") + "\\" + "test_file_cache";
+				if (FSO.FolderExists(dir)) {
+					STDOUT.Write(execute("powershell -Command Remove-Item -path \"\\\\?\\" + dir + "\" -recurse"));
+				}
+				FSO.CreateFolder(dir);
+
+				/* Fallback is implied, if filecache is enabled. */
+				INI.WriteLine("opcache.file_cache=" + dir);
+				INI.WriteLine("opcache.enable=1");
+				INI.WriteLine("opcache.enable_cli=1");
+			}
 		}
 	}
 
@@ -2997,7 +3015,26 @@ function toolset_setup_project_tools()
 	// we don't want to define LIB, as that will override the default library path
 	// that is set in that env var
 	PATH_PROG('lib', null, 'MAKE_LIB');
-	if (!PATH_PROG('bison')) {
+
+	var BISON = PATH_PROG('bison');
+	if (BISON) {
+		var BISONVERS = probe_binary(BISON, "longversion");
+		STDOUT.WriteLine('  Detected bison version ' + BISONVERS);
+
+		if (BISONVERS.match(/^\d+.\d+$/)) {
+			BISONVERS += ".0";
+		}
+
+		var hm = BISONVERS.match(/(\d+)\.(\d+)\.(\d+)/);
+		var nm = MINBISON.match(/(\d+)\.(\d+)\.(\d+)/);
+
+		var intvers =  (hm[1]-0)*10000 + (hm[2]-0)*100 + (hm[3]-0);
+		var intmin =  (nm[1]-0)*10000 + (nm[2]-0)*100 + (nm[3]-0);
+
+		if (intvers < intmin) {
+			ERROR('The minimum bison version requirement is ' + MINBISON);
+		}
+	} else {
 		ERROR('bison is required')
 	}
 
@@ -3005,7 +3042,7 @@ function toolset_setup_project_tools()
 		ERROR('sed is required')
 	}
 
-	RE2C = PATH_PROG('re2c');
+	var RE2C = PATH_PROG('re2c');
 	if (RE2C) {
 		var RE2CVERS = probe_binary(RE2C, "version");
 		STDOUT.WriteLine('  Detected re2c version ' + RE2CVERS);
@@ -3031,11 +3068,15 @@ function toolset_setup_project_tools()
 	PATH_PROG('7za');
 
 	// avoid picking up midnight commander from cygwin
-	PATH_PROG('mc', WshShell.Environment("Process").Item("PATH"));
+	if (!PATH_PROG('mc', WshShell.Environment("Process").Item("PATH"))) {
+		ERROR('mc is required')
+	}
 
 	// Try locating the manifest tool
 	if (VS_TOOLSET) {
-		PATH_PROG('mt', WshShell.Environment("Process").Item("PATH"));
+		if (!PATH_PROG('mt', WshShell.Environment("Process").Item("PATH"))) {
+			ERROR('mt is required')
+		}
 	}
 }
 /* Get compiler if the toolset is supported */

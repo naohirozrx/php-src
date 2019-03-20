@@ -92,6 +92,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define uint32 uint32_t
 #endif
 
+#include <Zend/zend_portability.h>
+
 struct lsapi_MD5Context {
     uint32 buf[4];
     uint32 bits[2];
@@ -767,7 +769,7 @@ static int (*fp_lve_leave)(struct liblve *, uint32_t *) = NULL;
 static int (*fp_lve_jail)( struct passwd *, char *) = NULL;
 static int lsapi_load_lve_lib(void)
 {
-    s_liblve = dlopen("liblve.so.0", RTLD_LAZY);
+    s_liblve = DL_LOAD("liblve.so.0");
     if (s_liblve)
     {
         fp_lve_is_available = dlsym(s_liblve, "lve_is_available");
@@ -2819,9 +2821,14 @@ static void lsapi_sigchild( int signal )
         if ( WIFSIGNALED( status ))
         {
             int sig_num = WTERMSIG( status );
-            int dump = WCOREDUMP( status );
+
+#ifdef WCOREDUMP
+            const char * dump = WCOREDUMP( status ) ? "yes" : "no";
+#else
+            const char * dump = "unknown";
+#endif
             lsapi_log("Child process with pid: %d was killed by signal: "
-                     "%d, core dump: %d\n", pid, sig_num, dump );
+                     "%d, core dumped: %s\n", pid, sig_num, dump );
         }
         if ( pid == s_pid_dump_debug_info )
         {

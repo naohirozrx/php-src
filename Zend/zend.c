@@ -38,6 +38,8 @@ static size_t global_map_ptr_last = 0;
 #ifdef ZTS
 ZEND_API int compiler_globals_id;
 ZEND_API int executor_globals_id;
+ZEND_API size_t compiler_globals_offset;
+ZEND_API size_t executor_globals_offset;
 static HashTable *global_function_table = NULL;
 static HashTable *global_class_table = NULL;
 static HashTable *global_constants_table = NULL;
@@ -679,8 +681,6 @@ static void compiler_globals_dtor(zend_compiler_globals *compiler_globals) /* {{
 
 static void executor_globals_ctor(zend_executor_globals *executor_globals) /* {{{ */
 {
-	ZEND_TSRMLS_CACHE_UPDATE();
-
 	zend_startup_constants();
 	zend_copy_constants(executor_globals->zend_constants, GLOBAL_CONSTANTS_TABLE);
 	zend_init_rsrc_plist();
@@ -773,14 +773,13 @@ static zend_bool php_auto_globals_create_globals(zend_string *name) /* {{{ */
 }
 /* }}} */
 
-int zend_startup(zend_utility_functions *utility_functions, char **extensions) /* {{{ */
+int zend_startup(zend_utility_functions *utility_functions) /* {{{ */
 {
 #ifdef ZTS
 	zend_compiler_globals *compiler_globals;
 	zend_executor_globals *executor_globals;
 	extern ZEND_API ts_rsrc_id ini_scanner_globals_id;
 	extern ZEND_API ts_rsrc_id language_scanner_globals_id;
-	ZEND_TSRMLS_CACHE_UPDATE();
 #else
 	extern zend_ini_scanner_globals ini_scanner_globals;
 	extern zend_php_scanner_globals language_scanner_globals;
@@ -871,10 +870,10 @@ int zend_startup(zend_utility_functions *utility_functions, char **extensions) /
 	zend_init_rsrc_list_dtors();
 
 #ifdef ZTS
-	ts_allocate_id(&compiler_globals_id, sizeof(zend_compiler_globals), (ts_allocate_ctor) compiler_globals_ctor, (ts_allocate_dtor) compiler_globals_dtor);
-	ts_allocate_id(&executor_globals_id, sizeof(zend_executor_globals), (ts_allocate_ctor) executor_globals_ctor, (ts_allocate_dtor) executor_globals_dtor);
-	ts_allocate_id(&language_scanner_globals_id, sizeof(zend_php_scanner_globals), (ts_allocate_ctor) php_scanner_globals_ctor, NULL);
-	ts_allocate_id(&ini_scanner_globals_id, sizeof(zend_ini_scanner_globals), (ts_allocate_ctor) ini_scanner_globals_ctor, NULL);
+	ts_allocate_fast_id(&compiler_globals_id, &compiler_globals_offset, sizeof(zend_compiler_globals), (ts_allocate_ctor) compiler_globals_ctor, (ts_allocate_dtor) compiler_globals_dtor);
+	ts_allocate_fast_id(&executor_globals_id, &executor_globals_offset, sizeof(zend_executor_globals), (ts_allocate_ctor) executor_globals_ctor, (ts_allocate_dtor) executor_globals_dtor);
+	ts_allocate_fast_id(&language_scanner_globals_id, &language_scanner_globals_offset, sizeof(zend_php_scanner_globals), (ts_allocate_ctor) php_scanner_globals_ctor, NULL);
+	ts_allocate_fast_id(&ini_scanner_globals_id, &ini_scanner_globals_offset, sizeof(zend_ini_scanner_globals), (ts_allocate_ctor) ini_scanner_globals_ctor, NULL);
 	compiler_globals = ts_resource(compiler_globals_id);
 	executor_globals = ts_resource(executor_globals_id);
 
@@ -959,11 +958,13 @@ static void zend_resolve_property_types(void) /* {{{ */
 		if (UNEXPECTED(ce->type == ZEND_INTERNAL_CLASS && ZEND_CLASS_HAS_TYPE_HINTS(ce))) {
 			ZEND_HASH_FOREACH_PTR(&ce->properties_info, prop_info) {
 				if (ZEND_TYPE_IS_NAME(prop_info->type)) {
-					zend_string *type_name = zend_string_tolower(ZEND_TYPE_NAME(prop_info->type));
-					zend_class_entry *prop_ce = zend_hash_find_ptr(CG(class_table), type_name);
+					zend_string *type_name = ZEND_TYPE_NAME(prop_info->type);
+					zend_string *lc_type_name = zend_string_tolower(type_name);
+					zend_class_entry *prop_ce = zend_hash_find_ptr(CG(class_table), lc_type_name);
 
 					ZEND_ASSERT(prop_ce && prop_ce->type == ZEND_INTERNAL_CLASS);
 					prop_info->type = ZEND_TYPE_ENCODE_CE(prop_ce, ZEND_TYPE_ALLOW_NULL(prop_info->type));
+					zend_string_release(lc_type_name);
 					zend_string_release(type_name);
 				}
 			} ZEND_HASH_FOREACH_END();
@@ -1009,6 +1010,8 @@ int zend_post_startup(void) /* {{{ */
 	compiler_globals->function_table = NULL;
 	free(compiler_globals->class_table);
 	compiler_globals->class_table = NULL;
+	free(compiler_globals->map_ptr_base);
+	compiler_globals->map_ptr_base = NULL;
 	if ((script_encoding_list = (zend_encoding **)compiler_globals->script_encoding_list)) {
 		compiler_globals_ctor(compiler_globals);
 		compiler_globals->script_encoding_list = (const zend_encoding **)script_encoding_list;
@@ -1524,35 +1527,14 @@ ZEND_API ZEND_COLD void zend_type_error(const char *format, ...) /* {{{ */
 	va_end(va);
 } /* }}} */
 
-ZEND_API ZEND_COLD void zend_internal_type_error(zend_bool throw_exception, const char *format, ...) /* {{{ */
+ZEND_API ZEND_COLD void zend_argument_count_error(const char *format, ...) /* {{{ */
 {
 	va_list va;
 	char *message = NULL;
 
 	va_start(va, format);
 	zend_vspprintf(&message, 0, format, va);
-	if (throw_exception) {
-		zend_throw_exception(zend_ce_type_error, message, 0);
-	} else {
-		zend_error(E_WARNING, "%s", message);
-	}
-	efree(message);
-
-	va_end(va);
-} /* }}} */
-
-ZEND_API ZEND_COLD void zend_internal_argument_count_error(zend_bool throw_exception, const char *format, ...) /* {{{ */
-{
-	va_list va;
-	char *message = NULL;
-
-	va_start(va, format);
-	zend_vspprintf(&message, 0, format, va);
-	if (throw_exception) {
-		zend_throw_exception(zend_ce_argument_count_error, message, 0);
-	} else {
-		zend_error(E_WARNING, "%s", message);
-	}
+	zend_throw_exception(zend_ce_argument_count_error, message, 0);
 	efree(message);
 
 	va_end(va);

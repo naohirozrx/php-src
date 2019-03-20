@@ -1390,28 +1390,13 @@ format_date_time:
 			   always sets tm_isdst to 0, sometimes incorrectly (InterBase 6 bug?)
 			*/
 			t.tm_isdst = -1;
-#if HAVE_TM_ZONE
+#if HAVE_STRUCT_TM_TM_ZONE
 			t.tm_zone = tzname[0];
 #endif
 			if (flag & PHP_IBASE_UNIXTIME) {
 				ZVAL_LONG(val, mktime(&t));
 			} else {
-#if HAVE_STRFTIME
 				l = strftime(string_data, sizeof(string_data), format, &t);
-#else
-				switch (type & ~1) {
-					default:
-						l = slprintf(string_data, sizeof(string_data), "%02d/%02d/%4d %02d:%02d:%02d", t.tm_mon+1, t.tm_mday,
-							t.tm_year + 1900, t.tm_hour, t.tm_min, t.tm_sec);
-						break;
-					case SQL_TYPE_DATE:
-						l = slprintf(string_data, sizeof(string_data), "%02d/%02d/%4d", t.tm_mon + 1, t.tm_mday, t.tm_year+1900);
-						break;
-					case SQL_TYPE_TIME:
-						l = slprintf(string_data, sizeof(string_data), "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
-						break;
-				}
-#endif
 				ZVAL_STRINGL(val, string_data, l);
 				break;
 			}

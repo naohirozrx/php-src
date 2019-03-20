@@ -160,7 +160,7 @@ EOF
     eval echo "$i = \$$i" >> Makefile
   done
 
-  cat $abs_srcdir/Makefile.global Makefile.fragments Makefile.objects >> Makefile
+  cat $abs_srcdir/build/Makefile.global Makefile.fragments Makefile.objects >> Makefile
 ])
 
 dnl
@@ -814,15 +814,11 @@ dnl from object_var in build-dir.
 dnl
 AC_DEFUN([PHP_SHARED_MODULE],[
   install_modules="install-modules"
+  suffix=la
 
   case $host_alias in
     *aix*[)]
-      suffix=so
-      link_cmd='$(LIBTOOL) --mode=link ifelse($4,,[$(CC)],[$(CXX)]) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) $(LDFLAGS) -Wl,-G -o '$3'/$1.la -export-dynamic -avoid-version -prefer-pic -module -rpath $(phplibdir) $(EXTRA_LDFLAGS) $($2) $(translit($1,a-z_-,A-Z__)_SHARED_LIBADD) && mv -f '$3'/.libs/$1.so '$3'/$1.so'
-      ;;
-    *[)]
-      suffix=la
-      link_cmd='$(LIBTOOL) --mode=link ifelse($4,,[$(CC)],[$(CXX)]) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) $(LDFLAGS) -o [$]@ -export-dynamic -avoid-version -prefer-pic -module -rpath $(phplibdir) $(EXTRA_LDFLAGS) $($2) $(translit($1,a-z_-,A-Z__)_SHARED_LIBADD)'
+      additional_flags="-Wl,-G"
       ;;
   esac
 
@@ -837,7 +833,7 @@ AC_DEFUN([PHP_SHARED_MODULE],[
 	\$(LIBTOOL) --mode=install cp $3/$1.$suffix \$(phplibdir)
 
 $3/$1.$suffix: \$($2) \$(translit($1,a-z_-,A-Z__)_SHARED_DEPENDENCIES)
-	$link_cmd
+	\$(LIBTOOL) --mode=link ifelse($4,,[\$(CC)],[\$(CXX)]) \$(COMMON_FLAGS) \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(LDFLAGS) $additional_flags -o [\$]@ -export-dynamic -avoid-version -prefer-pic -module -rpath \$(phplibdir) \$(EXTRA_LDFLAGS) \$($2) \$(translit($1,a-z_-,A-Z__)_SHARED_LIBADD)
 
 EOF
 ])
@@ -884,17 +880,6 @@ AC_DEFUN([PHP_SELECT_SAPI],[
     install_sapi="install-sapi"
     ifelse($3,,,[PHP_ADD_SOURCES([sapi/$1],[$3],[$4],[sapi])])
   ])
-])
-
-dnl deprecated
-AC_DEFUN([PHP_EXTENSION],[
-  sources=`$AWK -f $abs_srcdir/build/scan_makefile_in.awk < []PHP_EXT_SRCDIR($1)[]/Makefile.in`
-
-  PHP_NEW_EXTENSION($1, $sources, $2, $3)
-
-  if test -r "$ext_srcdir/Makefile.frag"; then
-    PHP_ADD_MAKEFILE_FRAGMENT
-  fi
 ])
 
 AC_DEFUN([PHP_ADD_BUILD_DIR],[
@@ -1025,12 +1010,6 @@ dnl -------------------------------------------------------------------------
 
 dnl Internal helper macros
 dnl
-dnl _PHP_DEF_HAVE_FILE(what, filename)
-AC_DEFUN([_PHP_DEF_HAVE_FILE], [
-  php_def_have_what=HAVE_[]`echo $1 | tr 'abcdefghijklmnopqrstuvwxyz-' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_' `
-  echo "#define $php_def_have_what 1" >> $2
-])
-dnl
 dnl _PHP_CHECK_SIZEOF(type, cross-value, extra-headers [, found-action [, not-found-action]])
 dnl
 AC_DEFUN([_PHP_CHECK_SIZEOF], [
@@ -1041,10 +1020,8 @@ AC_DEFUN([_PHP_CHECK_SIZEOF], [
     old_LDFLAGS=$LDFLAGS
     LDFLAGS=
     AC_RUN_IFELSE([AC_LANG_SOURCE([[#include <stdio.h>
-#if STDC_HEADERS
 #include <stdlib.h>
 #include <stddef.h>
-#endif
 #ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #endif
@@ -1089,21 +1066,6 @@ AC_DEFUN([PHP_CHECK_SIZEOF], [
 ])
 
 dnl
-dnl PHP_CHECK_TYPES(type-list, include-file [, extra-headers])
-dnl
-AC_DEFUN([PHP_CHECK_TYPES], [
-  for php_typename in $1; do
-    AC_MSG_CHECKING([whether $php_typename exists])
-    _PHP_CHECK_SIZEOF($php_typename, 0, $3, [
-      _PHP_DEF_HAVE_FILE($php_typename, $2)
-      AC_MSG_RESULT([yes])
-    ], [
-      AC_MSG_RESULT([no])
-    ])
-  done
-])
-
-dnl
 dnl PHP_CHECK_IN_ADDR_T
 dnl
 AC_DEFUN([PHP_CHECK_IN_ADDR_T], [
@@ -1114,10 +1076,8 @@ AC_CACHE_VAL(ac_cv_type_in_addr_t,
 changequote(<<,>>)dnl
 <<in_addr_t[^a-zA-Z_0-9]>>dnl
 changequote([,]), [#include <sys/types.h>
-#if STDC_HEADERS
 #include <stdlib.h>
 #include <stddef.h>
-#endif
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif], ac_cv_type_in_addr_t=yes, ac_cv_type_in_addr_t=no)])dnl
@@ -1378,20 +1338,6 @@ int readdir_r(DIR *, struct dirent *);
 ])
 
 dnl
-dnl PHP_TM_GMTOFF
-dnl
-AC_DEFUN([PHP_TM_GMTOFF],[
-AC_CACHE_CHECK([for tm_gmtoff in struct tm], ac_cv_struct_tm_gmtoff,
-[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
-#include <time.h>]], [[struct tm tm; tm.tm_gmtoff;]])],
-  [ac_cv_struct_tm_gmtoff=yes], [ac_cv_struct_tm_gmtoff=no])])
-
-if test "$ac_cv_struct_tm_gmtoff" = yes; then
-  AC_DEFINE(HAVE_TM_GMTOFF,1,[whether you have tm_gmtoff in struct tm])
-fi
-])
-
-dnl
 dnl PHP_STRUCT_FLOCK
 dnl
 AC_DEFUN([PHP_STRUCT_FLOCK],[
@@ -1447,65 +1393,6 @@ AC_DEFUN([PHP_MISSING_FCLOSE_DECL],[
 ])
 
 dnl
-dnl PHP_AC_BROKEN_SPRINTF
-dnl
-dnl Check for broken sprintf(), C99 conformance
-dnl
-AC_DEFUN([PHP_AC_BROKEN_SPRINTF],[
-  AC_CACHE_CHECK(whether sprintf is broken, ac_cv_broken_sprintf,[
-    AC_RUN_IFELSE([AC_LANG_SOURCE([[main() {char buf[20];exit(sprintf(buf,"testing 123")!=11); }]])],[
-      ac_cv_broken_sprintf=no
-    ],[
-      ac_cv_broken_sprintf=yes
-    ],[
-      ac_cv_broken_sprintf=no
-    ])
-  ])
-  if test "$ac_cv_broken_sprintf" = "yes"; then
-    AC_DEFINE(PHP_BROKEN_SPRINTF, 1, [Whether sprintf is C99 conform])
-  else
-    AC_DEFINE(PHP_BROKEN_SPRINTF, 0, [Whether sprintf is C99 conform])
-  fi
-])
-
-dnl
-dnl PHP_AC_BROKEN_SNPRINTF
-dnl
-dnl Check for broken snprintf(), C99 conformance
-dnl
-AC_DEFUN([PHP_AC_BROKEN_SNPRINTF],[
-  AC_CACHE_CHECK(whether snprintf is broken, ac_cv_broken_snprintf,[
-    AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#define NULL (0L)
-main() {
-  char buf[20];
-  int res = 0;
-  res = res || (snprintf(buf, 2, "marcus") != 6);
-  res = res || (buf[1] != '\0');
-  /* Implementations may consider this as an encoding error */
-  snprintf(buf, 0, "boerger");
-  /* However, they MUST ignore the pointer */
-  res = res || (buf[0] != 'm');
-  res = res || (snprintf(NULL, 0, "boerger") != 7);
-  res = res || (snprintf(buf, sizeof(buf), "%f", 0.12345678) != 8);
-  exit(res);
-}
-    ]])],[
-      ac_cv_broken_snprintf=no
-    ],[
-      ac_cv_broken_snprintf=yes
-    ],[
-      ac_cv_broken_snprintf=no
-    ])
-  ])
-  if test "$ac_cv_broken_snprintf" = "yes"; then
-    AC_DEFINE(PHP_BROKEN_SNPRINTF, 1, [Whether snprintf is C99 conform])
-  else
-    AC_DEFINE(PHP_BROKEN_SNPRINTF, 0, [Whether snprintf is C99 conform])
-  fi
-])
-
-dnl
 dnl PHP_SOCKADDR_CHECKS
 dnl
 AC_DEFUN([PHP_SOCKADDR_CHECKS], [
@@ -1527,29 +1414,6 @@ AC_DEFUN([PHP_SOCKADDR_CHECKS], [
   ])
   if test "$ac_cv_sockaddr_sa_len" = "yes"; then
     AC_DEFINE(HAVE_SOCKADDR_SA_LEN, 1, [Whether struct sockaddr has field sa_len])
-  fi
-])
-
-dnl
-dnl PHP_DECLARED_TIMEZONE
-dnl
-AC_DEFUN([PHP_DECLARED_TIMEZONE],[
-  AC_CACHE_CHECK(for declared timezone, ac_cv_declared_timezone,[
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#include <sys/types.h>
-#include <time.h>
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
-]],[[
-    time_t foo = (time_t) timezone;
-]])],[
-  ac_cv_declared_timezone=yes
-],[
-  ac_cv_declared_timezone=no
-])])
-  if test "$ac_cv_declared_timezone" = "yes"; then
-    AC_DEFINE(HAVE_DECLARED_TIMEZONE, 1, [Whether system headers declare timezone])
   fi
 ])
 
@@ -1882,25 +1746,6 @@ AC_DEFUN([PHP_SHLIB_SUFFIX_NAMES],[
 ])
 
 dnl
-dnl PHP_CHECK_64BIT([do if 32], [do if 64])
-dnl
-dnl This macro is used to detect if we're at 64-bit platform or not.
-dnl It could be useful for those external libs, that have different precompiled
-dnl versions in different directories.
-dnl
-AC_DEFUN([PHP_CHECK_64BIT],[
-  AC_CHECK_SIZEOF(long int, 4)
-  AC_MSG_CHECKING([checking if we're at 64-bit platform])
-  if test "$ac_cv_sizeof_long_int" = "4" ; then
-    AC_MSG_RESULT([no])
-    $1
-  else
-    AC_MSG_RESULT([yes])
-    $2
-  fi
-])
-
-dnl
 dnl PHP_C_BIGENDIAN
 dnl
 dnl Replacement macro for AC_C_BIGENDIAN
@@ -1978,7 +1823,7 @@ dnl
 dnl Search for bison and check it's version
 dnl
 AC_DEFUN([PHP_PROG_BISON], [
-  AC_PROG_YACC
+  AC_CHECK_PROG(YACC, bison, bison)
   LIBZEND_BISON_CHECK
   PHP_SUBST(YACC)
 ])
@@ -2737,10 +2582,11 @@ dnl
 dnl PHP_CHECK_STDINT_TYPES
 dnl
 AC_DEFUN([PHP_CHECK_STDINT_TYPES], [
-  AC_CHECK_SIZEOF([short], 2)
-  AC_CHECK_SIZEOF([int], 4)
-  AC_CHECK_SIZEOF([long], 4)
-  AC_CHECK_SIZEOF([long long], 8)
+  AC_CHECK_SIZEOF([short])
+  AC_CHECK_SIZEOF([int])
+  AC_CHECK_SIZEOF([long])
+  AC_CHECK_SIZEOF([long long])
+  AC_CHECK_SIZEOF([size_t])
   AC_CHECK_TYPES([int8, int16, int32, int64, int8_t, int16_t, int32_t, int64_t, uint8, uint16, uint32, uint64, uint8_t, uint16_t, uint32_t, uint64_t, u_int8_t, u_int16_t, u_int32_t, u_int64_t], [], [], [
 #if HAVE_STDINT_H
 # include <stdint.h>
@@ -2749,7 +2595,6 @@ AC_DEFUN([PHP_CHECK_STDINT_TYPES], [
 # include <sys/types.h>
 #endif
   ])
-  AC_DEFINE([PHP_HAVE_STDINT_TYPES], [1], [Checked for stdint types])
 ])
 
 dnl PHP_CHECK_BUILTIN_EXPECT

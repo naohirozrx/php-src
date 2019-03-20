@@ -325,7 +325,7 @@ typedef struct _zend_oparray_context {
 #define ZEND_ACC_DTOR                    (1 << 29) /*     |  X  |     |     */
 /*                                                        |     |     |     */
 /* op_array uses strict mode types                        |     |     |     */
-#define ZEND_ACC_STRICT_TYPES            (1 << 31) /*     |  X  |     |     */
+#define ZEND_ACC_STRICT_TYPES            (1U << 31) /*    |  X  |     |     */
 
 
 #define ZEND_ACC_PPP_MASK  (ZEND_ACC_PUBLIC | ZEND_ACC_PROTECTED | ZEND_ACC_PRIVATE)
@@ -950,7 +950,7 @@ static zend_always_inline int zend_check_arg_send_type(const zend_function *zf, 
 #define ARG_MAY_BE_SENT_BY_REF(zf, arg_num) \
 	zend_check_arg_send_type(zf, arg_num, ZEND_SEND_PREFER_REF)
 
-/* Quick API to check firat 12 arguments */
+/* Quick API to check first 12 arguments */
 #define MAX_ARG_FLAG_NUM 12
 
 #ifdef WORDS_BIGENDIAN

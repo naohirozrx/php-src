@@ -35,7 +35,7 @@ static void ps_call_handler(zval *func, int argc, zval *argv, zval *retval)
 		return;
 	}
 	PS(in_save_handler) = 1;
-	if (call_user_function(EG(function_table), NULL, func, retval, argc, argv) == FAILURE) {
+	if (call_user_function(NULL, NULL, func, retval, argc, argv) == FAILURE) {
 		zval_ptr_dtor(retval);
 		ZVAL_UNDEF(retval);
 	} else if (Z_ISUNDEF_P(retval)) {
@@ -189,13 +189,14 @@ PS_GC_FUNC(user)
 	ps_call_handler(&PSF(gc), 1, args, &retval);
 
 	if (Z_TYPE(retval) == IS_LONG) {
-		convert_to_long(&retval);
 		return Z_LVAL(retval);
 	}
+
 	/* This is for older API compatibility */
 	if (Z_TYPE(retval) == IS_TRUE) {
 		return 1;
 	}
+
 	/* Anything else is some kind of error */
 	return -1; // Error
 }

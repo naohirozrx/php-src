@@ -116,6 +116,7 @@ PHPAPI int (*php_register_internal_extensions_func)(void) = php_register_interna
 php_core_globals core_globals;
 #else
 PHPAPI int core_globals_id;
+PHPAPI size_t core_globals_offset;
 #endif
 
 #define SAFE_FILENAME(f) ((f)?(f):"-")
@@ -2125,7 +2126,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	php_output_startup();
 
 #ifdef ZTS
-	ts_allocate_id(&core_globals_id, sizeof(php_core_globals), (ts_allocate_ctor) core_globals_ctor, (ts_allocate_dtor) core_globals_dtor);
+	ts_allocate_fast_id(&core_globals_id, &core_globals_offset, sizeof(php_core_globals), (ts_allocate_ctor) core_globals_ctor, (ts_allocate_dtor) core_globals_dtor);
 #ifdef PHP_WIN32
 	ts_allocate_id(&php_win32_core_globals_id, sizeof(php_win32_core_globals), (ts_allocate_ctor) php_win32_core_globals_ctor, (ts_allocate_dtor) php_win32_core_globals_dtor);
 #endif
@@ -2148,7 +2149,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	zuf.printf_to_smart_str_function = php_printf_to_smart_str;
 	zuf.getenv_function = sapi_getenv;
 	zuf.resolve_path_function = php_resolve_path_for_zend;
-	zend_startup(&zuf, NULL);
+	zend_startup(&zuf);
 
 #if HAVE_SETLOCALE
 	setlocale(LC_CTYPE, "");
@@ -2334,7 +2335,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	}
 
 	/* Check for deprecated directives */
-	/* NOTE: If you add anything here, remember to add it to Makefile.global! */
+	/* NOTE: If you add anything here, remember to add it to build/Makefile.global! */
 	{
 		struct {
 			const long error_level;
@@ -2748,3 +2749,37 @@ PHPAPI int php_lint_script(zend_file_handle *file)
 	return retval;
 }
 /* }}} */
+
+#ifdef ZTS
+/* {{{ php_reserve_tsrm_memory
+ */
+PHPAPI void php_reserve_tsrm_memory(void)
+{
+	tsrm_reserve(
+		TSRM_ALIGNED_SIZE(sizeof(zend_compiler_globals)) +
+		TSRM_ALIGNED_SIZE(sizeof(zend_executor_globals)) +
+		TSRM_ALIGNED_SIZE(sizeof(zend_php_scanner_globals)) +
+		TSRM_ALIGNED_SIZE(sizeof(zend_ini_scanner_globals)) +
+		TSRM_ALIGNED_SIZE(sizeof(virtual_cwd_globals)) +
+#ifdef ZEND_SIGNALS
+		TSRM_ALIGNED_SIZE(sizeof(zend_signal_globals_t)) +
+#endif
+		TSRM_ALIGNED_SIZE(zend_mm_globals_size()) +
+		TSRM_ALIGNED_SIZE(zend_gc_globals_size()) +
+		TSRM_ALIGNED_SIZE(sizeof(php_core_globals)) +
+		TSRM_ALIGNED_SIZE(sizeof(sapi_globals_struct))
+	);
+}
+/* }}} */
+
+/* {{{ php_tsrm_startup
+ */
+PHPAPI int php_tsrm_startup(void)
+{
+	int ret = tsrm_startup(1, 1, 0, NULL);
+	php_reserve_tsrm_memory();
+	(void)ts_resource(0);
+	return ret;
+}
+/* }}} */
+#endif

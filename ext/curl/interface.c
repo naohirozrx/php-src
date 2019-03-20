@@ -3113,8 +3113,8 @@ PHP_FUNCTION(curl_exec)
 
 	error = curl_easy_perform(ch->cp);
 	SAVE_CURL_ERROR(ch, error);
-	/* CURLE_PARTIAL_FILE is returned by HEAD requests */
-	if (error != CURLE_OK && error != CURLE_PARTIAL_FILE) {
+
+	if (error != CURLE_OK) {
 		smart_str_free(&ch->handlers->write->buf);
 		RETURN_FALSE;
 	}
@@ -3429,8 +3429,12 @@ PHP_FUNCTION(curl_error)
 		RETURN_FALSE;
 	}
 
-	ch->err.str[CURL_ERROR_SIZE] = 0;
-	RETURN_STRING(ch->err.str);
+	if (ch->err.no) {
+		ch->err.str[CURL_ERROR_SIZE] = 0;
+		RETURN_STRING(ch->err.str);
+	} else {
+		RETURN_EMPTY_STRING();
+	}
 }
 /* }}} */
 

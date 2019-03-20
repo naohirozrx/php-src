@@ -230,7 +230,7 @@ echo "\n*** Testing print_r() on resources ***\n";
 $file_handle = fopen(__FILE__, "r");
 
 /* directory type resource */
-$dir_handle = opendir( dirname(__FILE__) );
+$dir_handle = opendir( __DIR__ );
 
 $resources = array (
   $file_handle,
@@ -270,16 +270,6 @@ $misc_values = array (
 );
 /* calling check_printr() to display miscelleneous data using print_r() */
 check_printr($misc_values);
-
-echo "\n*** Testing error conditions ***\n";
-//passing zero argument
-var_dump( print_r() );
-
-//passing more than required no. of arguments
-var_dump( print_r(123, true, "abc") );
-
-// check when second arg is given other than boolean TRUE
-var_dump( print_r ($value, "string") );
 
 /* closing resource handle used */
 closedir($dir_handle);
@@ -1706,15 +1696,4 @@ Array
 -- Iteration 4 --
 
 
-
-*** Testing error conditions ***
-
-Warning: print_r() expects at least 1 parameter, 0 given in %s on line %d
-bool(false)
-
-Warning: print_r() expects at most 2 parameters, 3 given in %s on line %d
-bool(false)
-
-Notice: Undefined variable: value in %s on line %d
-string(0) ""
 Done

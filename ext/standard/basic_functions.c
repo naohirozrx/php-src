@@ -123,8 +123,6 @@ typedef struct _user_tick_function_entry {
 static void user_shutdown_function_dtor(zval *zv);
 static void user_tick_function_dtor(user_tick_function_entry *tick_function_entry);
 
-#undef sprintf
-
 /* {{{ arginfo */
 /* {{{ main/main.c */
 ZEND_BEGIN_ARG_INFO(arginfo_set_time_limit, 0)
@@ -5058,7 +5056,7 @@ static int user_shutdown_function_call(zval *zv) /* {{{ */
 		return 0;
 	}
 
-	if (call_user_function(EG(function_table), NULL,
+	if (call_user_function(NULL, NULL,
 				&shutdown_function_entry->arguments[0],
 				&retval,
 				shutdown_function_entry->arg_count - 1,
@@ -5079,7 +5077,7 @@ static void user_tick_function_call(user_tick_function_entry *tick_fe) /* {{{ */
 	if (! tick_fe->calling) {
 		tick_fe->calling = 1;
 
-		if (call_user_function(	EG(function_table), NULL,
+		if (call_user_function(NULL, NULL,
 								function,
 								&retval,
 								tick_fe->arg_count - 1,

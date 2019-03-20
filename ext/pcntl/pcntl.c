@@ -238,6 +238,9 @@ zend_module_entry pcntl_module_entry = {
 };
 
 #ifdef COMPILE_DL_PCNTL
+#ifdef ZTS
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
 ZEND_GET_MODULE(pcntl)
 #endif
 
@@ -576,11 +579,15 @@ static void php_pcntl_register_errno_constants(INIT_FUNC_ARGS)
 
 static PHP_GINIT_FUNCTION(pcntl)
 {
+#if defined(COMPILE_DL_PCNTL) && defined(ZTS)
+	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
 	memset(pcntl_globals, 0, sizeof(*pcntl_globals));
 }
 
 PHP_RINIT_FUNCTION(pcntl)
 {
+	php_add_tick_function(pcntl_signal_dispatch, NULL);
 	zend_hash_init(&PCNTL_G(php_signal_table), 16, NULL, ZVAL_PTR_DTOR, 0);
 	PCNTL_G(head) = PCNTL_G(tail) = PCNTL_G(spares) = NULL;
 	PCNTL_G(async_signals) = 0;
@@ -591,7 +598,6 @@ PHP_MINIT_FUNCTION(pcntl)
 {
 	php_register_signal_constants(INIT_FUNC_ARGS_PASSTHRU);
 	php_pcntl_register_errno_constants(INIT_FUNC_ARGS_PASSTHRU);
-	php_add_tick_function(pcntl_signal_dispatch, NULL);
 	orig_interrupt_function = zend_interrupt_function;
 	zend_interrupt_function = pcntl_interrupt_function;
 
@@ -1497,7 +1503,7 @@ void pcntl_signal_dispatch()
 
 				/* Call php signal handler - Note that we do not report errors, and we ignore the return value */
 				/* FIXME: this is probably broken when multiple signals are handled in this while loop (retval) */
-				call_user_function(EG(function_table), NULL, handle, &retval, 2, params);
+				call_user_function(NULL, NULL, handle, &retval, 2, params);
 				zval_ptr_dtor(&retval);
 #ifdef HAVE_STRUCT_SIGINFO_T
 				zval_ptr_dtor(&params[1]);

@@ -45,6 +45,8 @@
 BEGIN_EXTERN_C()
 ZEND_API extern int compiler_globals_id;
 ZEND_API extern int executor_globals_id;
+ZEND_API extern size_t compiler_globals_offset;
+ZEND_API extern size_t executor_globals_offset;
 END_EXTERN_C()
 
 #endif
@@ -225,11 +227,14 @@ struct _zend_executor_globals {
 	zend_function trampoline;
 	zend_op       call_trampoline_op;
 
+	HashTable weakrefs;
+
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
 
-#define EG_FLAGS_INITIAL	0x00
-#define EG_FLAGS_IN_SHUTDOWN	0x01
+#define EG_FLAGS_INITIAL				(0)
+#define EG_FLAGS_IN_SHUTDOWN			(1<<0)
+#define EG_FLAGS_OBJECT_STORE_NO_REUSE	(1<<1)
 
 struct _zend_ini_scanner_globals {
 	zend_file_handle *yy_in;

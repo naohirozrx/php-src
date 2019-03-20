@@ -29,7 +29,7 @@ AC_DEFUN([PHP_MBSTRING_ADD_INSTALL_HEADERS], [
 ])
 
 AC_DEFUN([PHP_MBSTRING_EXTENSION], [
-  PHP_NEW_EXTENSION(mbstring, $PHP_MBSTRING_SOURCES, $ext_shared,, $PHP_MBSTRING_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+  PHP_NEW_EXTENSION(mbstring, $PHP_MBSTRING_BASE_SOURCES $PHP_MBSTRING_SOURCES, $ext_shared,, $PHP_MBSTRING_CFLAGS -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
   PHP_SUBST(MBSTRING_SHARED_LIBADD)
 
   for dir in $PHP_MBSTRING_EXTRA_BUILD_DIRS; do
@@ -42,10 +42,8 @@ AC_DEFUN([PHP_MBSTRING_EXTENSION], [
   done
 
   if test "$ext_shared" = "no"; then
-    PHP_ADD_SOURCES(PHP_EXT_DIR(mbstring), $PHP_MBSTRING_BASE_SOURCES)
     out="php_config.h"
   else
-    PHP_ADD_SOURCES_X(PHP_EXT_DIR(mbstring),$PHP_MBSTRING_BASE_SOURCES,,shared_objects_mbstring,yes)
     if test -f "$ext_builddir/config.h.in"; then
       out="$abs_builddir/config.h"
     else
@@ -202,11 +200,17 @@ dnl
 dnl Main config
 dnl
 
-PHP_ARG_ENABLE(mbstring, whether to enable multibyte string support,
-[  --enable-mbstring       Enable multibyte string support])
+PHP_ARG_ENABLE([mbstring],
+  [whether to enable multibyte string support],
+  [AS_HELP_STRING([--enable-mbstring],
+    [Enable multibyte string support])])
 
-PHP_ARG_ENABLE([mbregex], [whether to enable multibyte regex support (requires oniguruma)],
-[  --disable-mbregex       MBSTRING: Disable multibyte regex support], yes, no)
+PHP_ARG_ENABLE([mbregex],
+  [whether to enable multibyte regex support (requires oniguruma)],
+  [AS_HELP_STRING([--disable-mbregex],
+    [MBSTRING: Disable multibyte regex support])],
+  [yes],
+  [no])
 
 if test "$PHP_MBSTRING" != "no"; then
   AC_DEFINE([HAVE_MBSTRING],1,[whether to have multibyte string support])

@@ -182,7 +182,7 @@ static void user_config_cache_entry_dtor(zval *el)
 
 #ifdef ZTS
 static int php_cgi_globals_id;
-#define CGIG(v) TSRMG(php_cgi_globals_id, php_cgi_globals_struct *, v)
+#define CGIG(v) ZEND_TSRMG(php_cgi_globals_id, php_cgi_globals_struct *, v)
 #else
 static php_cgi_globals_struct php_cgi_globals;
 #define CGIG(v) (php_cgi_globals.v)
@@ -1550,10 +1550,6 @@ int main(int argc, char *argv[])
 	int ini_entries_len = 0;
 	/* end of temporary locals */
 
-#ifdef ZTS
-	void ***tsrm_ls;
-#endif
-
 	int max_requests = 0;
 	int requests = 0;
 	int fcgi_fd = 0;
@@ -1583,8 +1579,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef ZTS
-	tsrm_startup(1, 1, 0, NULL);
-	tsrm_ls = ts_resource(0);
+	php_tsrm_startup();
 #endif
 
 	zend_signal_startup();

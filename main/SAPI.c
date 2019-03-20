@@ -45,6 +45,7 @@
 
 #ifdef ZTS
 SAPI_API int sapi_globals_id;
+SAPI_API size_t sapi_globals_offset;
 #else
 sapi_globals_struct sapi_globals;
 #endif
@@ -56,9 +57,6 @@ static void _type_dtor(zval *zv)
 
 static void sapi_globals_ctor(sapi_globals_struct *sapi_globals)
 {
-#ifdef ZTS
-	ZEND_TSRMLS_CACHE_UPDATE();
-#endif
 	memset(sapi_globals, 0, sizeof(*sapi_globals));
 	zend_hash_init_ex(&sapi_globals->known_post_content_types, 8, NULL, _type_dtor, 1, 0);
 	php_setup_sapi_content_types();
@@ -79,7 +77,7 @@ SAPI_API void sapi_startup(sapi_module_struct *sf)
 	sapi_module = *sf;
 
 #ifdef ZTS
-	ts_allocate_id(&sapi_globals_id, sizeof(sapi_globals_struct), (ts_allocate_ctor) sapi_globals_ctor, (ts_allocate_dtor) sapi_globals_dtor);
+	ts_allocate_fast_id(&sapi_globals_id, &sapi_globals_offset, sizeof(sapi_globals_struct), (ts_allocate_ctor) sapi_globals_ctor, (ts_allocate_dtor) sapi_globals_dtor);
 # ifdef PHP_WIN32
 	_configthreadlocale(_ENABLE_PER_THREAD_LOCALE);
 # endif

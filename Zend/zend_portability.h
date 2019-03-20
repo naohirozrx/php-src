@@ -139,12 +139,18 @@
 #  define RTLD_GLOBAL 0
 # endif
 
-# if defined(RTLD_GROUP) && defined(RTLD_WORLD) && defined(RTLD_PARENT)
-#  define DL_LOAD(libname)			dlopen(libname, RTLD_LAZY | RTLD_GLOBAL | RTLD_GROUP | RTLD_WORLD | RTLD_PARENT)
-# elif defined(RTLD_DEEPBIND) && !defined(__SANITIZE_ADDRESS__)
-#  define DL_LOAD(libname)			dlopen(libname, RTLD_LAZY | RTLD_GLOBAL | RTLD_DEEPBIND)
+# ifdef PHP_USE_RTLD_NOW
+#  define PHP_RTLD_MODE  RTLD_NOW
 # else
-#  define DL_LOAD(libname)			dlopen(libname, RTLD_LAZY | RTLD_GLOBAL)
+#  define PHP_RTLD_MODE  RTLD_LAZY
+# endif
+
+# if defined(RTLD_GROUP) && defined(RTLD_WORLD) && defined(RTLD_PARENT)
+#  define DL_LOAD(libname)			dlopen(libname, PHP_RTLD_MODE | RTLD_GLOBAL | RTLD_GROUP | RTLD_WORLD | RTLD_PARENT)
+# elif defined(RTLD_DEEPBIND) && !defined(__SANITIZE_ADDRESS__)
+#  define DL_LOAD(libname)			dlopen(libname, PHP_RTLD_MODE | RTLD_GLOBAL | RTLD_DEEPBIND)
+# else
+#  define DL_LOAD(libname)			dlopen(libname, PHP_RTLD_MODE | RTLD_GLOBAL)
 # endif
 # define DL_UNLOAD					dlclose
 # if defined(DLSYM_NEEDS_UNDERSCORE)
@@ -438,12 +444,8 @@ char *alloca();
 #define MAX(a, b)  (((a)>(b))?(a):(b))
 #define MIN(a, b)  (((a)<(b))?(a):(b))
 
-/* x86 instructions BT, SHL, SHR don't require masking */
-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__)) || defined(ZEND_WIN32)
-# define ZEND_BIT_TEST(bits, bit) (((bits)[(bit) / (sizeof((bits)[0])*8)] >> (bit)) & 1)
-#else
-# define ZEND_BIT_TEST(bits, bit) (((bits)[(bit) / (sizeof((bits)[0])*8)] >> ((bit) & (sizeof((bits)[0])*8-1))) & 1)
-#endif
+#define ZEND_BIT_TEST(bits, bit) \
+	(((bits)[(bit) / (sizeof((bits)[0])*8)] >> ((bit) & (sizeof((bits)[0])*8-1))) & 1)
 
 /* We always define a function, even if there's a macro or expression we could
  * alias, so that using it in contexts where we can't make function calls

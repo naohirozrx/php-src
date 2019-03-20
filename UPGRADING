@@ -57,7 +57,7 @@ PHP 8.0 UPGRADE NOTES
 
         // With
         function my_error_handler($err_no, $err_msg, $filename, $linenum) {
-            if (error_reporting() & $err_no) {
+            if (!(error_reporting() & $err_no)) {
                 return; // Silenced
             }
             // ...
@@ -139,6 +139,9 @@ PHP 8.0 UPGRADE NOTES
   . The method PDOStatement::setFetchMode() now accepts the following signature:
 
         PDOStatement::setFetchMode($mode, $classname, $params) 
+
+- PDO_ODBC:
+  . The php.ini directive pdo_odbc.db2_instance_name has been removed
 
 - Reflection:
   . The method signatures
